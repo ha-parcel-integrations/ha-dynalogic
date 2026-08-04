@@ -12,11 +12,18 @@ from . import DynalogicConfigEntry
 # identifies a person, an address or a specific parcel. Over-redacting is
 # cheap; under-redacting leaks a user's home address into a GitHub thread.
 #
-# This carrier needs a wider net than most: no populated response has ever been
-# seen, so the payload's leaf names are not fully known — and the app's own
-# assets prove it carries a driver and map coordinates that no recovered field
-# accounts for. `Addressee` is redacted as a whole block for that reason:
-# redacting the leaves we happen to know would leave the ones we do not.
+# This carrier needs a wider net than most: only one populated response has ever
+# been seen, and it was a delivered order — the payload an in-transit parcel
+# carries (the app renders a driver and map coordinates) is still unknown, so
+# those names are listed pre-emptively. Whole blocks are redacted rather than
+# their leaves for the same reason: redacting the leaves we happen to know
+# would leave the ones we do not.
+#
+# `async_redact_data` matches keys **case-sensitively and at every depth**, so
+# the carrier's PascalCase spelling has to be listed next to our own snake_case
+# one. The first real capture proved that matters: `barcode` was redacted while
+# `OrderData.OrderLines[].Barcode` — the physical parcel barcode, and a
+# different value from the order number — went out in the clear.
 TO_REDACT = {
     # canonical fields we publish ourselves
     "tracking_code",
@@ -30,10 +37,25 @@ TO_REDACT = {
     "TrackAndTraceNumber",
     # per-order contact block: phone numbers and mail addresses
     "ContactInformation",
-    # the driver and where the van is; names unconfirmed, listed pre-emptively
+    # the recipient's own standing delivery instructions ("do not leave with a
+    # neighbour"), which say something about the household
+    "TransportConditions",
+    # every identifier that resolves back to this one shipment. `Barcode` and
+    # `CustomerOrderNumber` are the carrier's own spellings of the parcel
+    # number; `OrderId` / `OrderNumber` reach the same order.
+    "Barcode",
+    "CustomerOrderNumber",
+    "OrderId",
+    "OrderNumber",
+    # the driver and where the van is. `DriverName` and the two driver ids are
+    # observed; the position field names are not, and `TransportProgress` is
+    # the prime suspect for the delayed live position.
     "Driver",
     "DriverName",
+    "DriverId",
+    "DriverBadgeNumber",
     "DriverPhoto",
+    "TransportProgress",
     "Latitude",
     "Longitude",
     "Position",

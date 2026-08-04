@@ -6,15 +6,17 @@ carrier-specific mapping apart from the coordinator (which is nearly identical
 everywhere), and it makes the mapping trivially unit-testable without spinning
 up HA.
 
-**Read this before changing the mapping.** No populated tracking response has
-ever been observed for this carrier: the field names below were recovered from
-the vendor's web client, the endpoint's own OpenAPI document declares no success
-schema, and the reconstruction is known to be *incomplete* rather than merely
-untyped — the app renders a driver, map pins and a delayed live position that
-none of these fields account for. So the rule here is: read the fields we are
-sure exist, publish ``None`` for everything else, and make every guess announce
-itself once via :func:`_warn_once` so the first real parcel corrects it instead
-of passing silently. The suite's pre-1.0 obligation is exactly this.
+**Read this before changing the mapping.** Exactly **one** populated tracking
+response has ever been observed — a delivered order, captured 2026-08-05 — and
+it corrected two things the reconstruction had wrong (the timestamp format, and
+the claim that the carrier ships no status text) while leaving the expensive
+gaps open: it was already delivered, so the delivery window, the driver position
+and the map pins the app renders for a parcel *in transit* remain unseen.
+
+So the rule here is unchanged: read the fields we are sure exist, publish
+``None`` for everything else, and make every remaining guess announce itself
+once via :func:`_warn_once` so the next real parcel corrects it instead of
+passing silently. The suite's pre-1.0 obligation is exactly this.
 """
 from __future__ import annotations
 
@@ -35,11 +37,15 @@ from .const import (
     HISTORY_MAX_EVENTS,
     KEY_ACTIVE_STEP,
     KEY_ACTIVITIES,
+    KEY_ADDRESSEE,
+    KEY_CUSTOMER_NAME,
     KEY_EXECUTED,
     KEY_ORDER_DATA,
+    KEY_ORDER_STATUS,
     KEY_RESULT_CODE,
     KEY_SCENARIO,
     KEY_TRACKING_NUMBER,
+    KNOWN_ORDER_STATUSES,
     KNOWN_RESULT_CODES,
     KNOWN_SCENARIOS,
     KNOWN_TOP_LEVEL_KEYS,
@@ -158,9 +164,11 @@ def map_parcel_status(
     vocabulary deliberately has one delivered state, and the scenario survives
     on ``raw_status`` and in ``raw`` for anyone who needs the distinction.
 
-    **This mapping is derived, not observed.** It is a reading of two fields
-    whose combinations no real parcel has yet exercised, which is why every
-    unknown value warns.
+    **One combination of the mapping is now observed**, ``DEL_DEF``/4/0 →
+    ``delivered``, and a real order confirmed it three ways over: the step, the
+    result code, and the carrier's own ``DetailCaption`` and
+    ``OrderStatusForAddressee``. Every other combination is still a reading of
+    two fields no real parcel has exercised, which is why they all still warn.
     """
     if scenario is not None:
         scenario = str(scenario).strip().upper()
@@ -220,6 +228,19 @@ def _status_for(
     return ParcelStatus.REGISTERED
 
 
+# ``(Scenario, ActiveStep, TransportResultCode)`` triples a real order has been
+# seen carrying, with the status this module reads them as independently
+# confirmed by the carrier's own text. Add to this only from a capture, never
+# from reasoning — the whole value of the list is that it means "seen".
+CONFIRMED_COMBINATIONS = frozenset(
+    {
+        # Captured 2026-08-05: a completed bol.com delivery. `DetailCaption`
+        # said "Succesvol bezorgd" and `OrderStatusForAddressee` "COMPLETED".
+        ("DEL_DEF", 4, 0),
+    }
+)
+
+
 def _report_combination(
     scenario: str | None, step: int | None, code: int | None, status: ParcelStatus
 ) -> None:
@@ -231,7 +252,14 @@ def _report_combination(
     describe ("it was on the van when this fired"). One line per distinct
     combination is a bounded amount of noise — at most a handful per parcel —
     and it is the difference between guessing the vocabulary and knowing it.
+
+    Combinations a real order has already confirmed are skipped: asking users
+    to re-report the one case we are sure of would spend their goodwill on the
+    answer we have. Every parcel ends up delivered, so without this the plain
+    completed state would be the loudest line in the log.
     """
+    if (scenario, step, code) in CONFIRMED_COMBINATIONS:
+        return
     _warn_once(
         f"combination:{scenario}/{step}/{code}",
         "Dynalogic reported Scenario=%s ActiveStep=%s TransportResultCode=%s, "
@@ -248,11 +276,20 @@ def _report_combination(
 def raw_status(scenario: Any, active_step: Any, result_code: Any) -> str | None:
     """Return the carrier's own status, verbatim, as one string.
 
-    Dynalogic ships no human-readable status text — its clients render an icon
-    per step — so the three status fields are joined instead of inventing a
-    label for them. Consumers that need the distinction the canonical status
-    flattens away (a neighbour delivery, *which* result code) read this or
-    ``raw``.
+    Dynalogic has no single status *field*, so the three that carry the status
+    are joined: ``"DEL_DEF/4/0"``.
+
+    The first real capture showed the carrier does ship human-readable text
+    after all — ``DetailCaption`` ("Succesvol bezorgd"), ``DetailTextLine2``,
+    and a machine-readable ``OrderStatusForAddressee`` ("COMPLETED"). 0.9.x said
+    it shipped none; that was wrong, and it is corrected here rather than acted
+    on. The triple stays because it is the better automation key: it is
+    complete (never absent while the parcel has a status at all), it is not
+    localised, and it preserves the scenario the canonical status flattens away
+    — a neighbour delivery is ``delivered`` here and ``DEL_NB/4/0`` there. The
+    prose rides in ``raw`` for anyone who wants to display it, and
+    ``OrderStatusForAddressee`` is being collected by :func:`check_order_status`
+    against the day it has enough known values to cross-check the mapping.
     """
     parts = [scenario, active_step, result_code]
     if all(part is None for part in parts):
@@ -280,31 +317,51 @@ def parse_iso(value: str | None) -> datetime | None:
 def to_iso_timestamp(value: Any) -> str | None:
     """Return an ISO 8601 string for a Dynalogic timestamp field.
 
-    Dynalogic stamps ``YYYYMMDDHHmmss`` with **no timezone marker at all** — the
-    vendor's own client detects the format with a bare 14-digit match and
-    formats it as local time. It is read as Europe/Amsterdam here, which is an
-    assumption about a Dutch last-mile carrier and not a confirmed fact: the
-    first real parcel should be checked against a timestamp the user can see in
-    the vendor's own app. Anything that is not 14 digits warns once and is
-    dropped rather than guessed at.
+    Two forms are accepted, and the difference between them cost this
+    integration its whole history until a real response arrived:
+
+    * **ISO 8601, naive** — ``2026-08-04T13:34:10.507``, fractional seconds of
+      any length, no offset. This is what the middleware actually sends; it is
+      the only form ever observed.
+    * **``YYYYMMDDHHmmss``** — what the vendor's *web* client detects with a
+      bare 14-digit match. 0.9.0 accepted only this, on the strength of that
+      client, and consequently dropped every timestamp a real order carried:
+      no ``history``, no ``delivered_at``. Kept because the web client plainly
+      handles it, so some route or some order kind presumably emits it.
+
+    Neither form carries a zone, so both are read as Europe/Amsterdam — an
+    assumption, and one with live counter-evidence; see ``CARRIER_TIMEZONE``.
+    A stamp that *does* carry an offset is trusted as-is. Anything else warns
+    once and is dropped rather than guessed at.
     """
     if value is None:
         return None
     text = str(value).strip()
     if not text:
         return None
+
+    parsed: datetime | None = None
     try:
         parsed = datetime.strptime(text, TIMESTAMP_FORMAT)
     except ValueError:
+        try:
+            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except ValueError:
+            parsed = None
+
+    if parsed is None:
         _warn_once(
             "timestamp_format",
-            "Dynalogic sent a timestamp that is not YYYYMMDDHHmmss (%r) — it "
+            "Dynalogic sent a timestamp in a format we cannot read (%r) — it "
             "was dropped, so a parcel may be missing its history or delivery "
             "time.",
             text,
         )
         return None
-    return parsed.replace(tzinfo=_CARRIER_TZ).isoformat()
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=_CARRIER_TZ)
+    return parsed.isoformat()
 
 
 # Candidate keys for an activity's own description. ``ExecutedDateTime`` is the
@@ -383,13 +440,97 @@ def build_history(
     return ordered[-max_events:]
 
 
+def _order_data(raw: dict) -> dict:
+    """Return the ``OrderData`` block, or an empty dict when it is absent.
+
+    Absent on the ``partial`` route, and on a ``full`` response the postcode did
+    not unlock — :func:`check_response_shape` is what complains about the
+    second case, so callers here can simply read through it.
+    """
+    order_data = raw.get(KEY_ORDER_DATA)
+    return order_data if isinstance(order_data, dict) else {}
+
+
 def _activities(raw: dict) -> list:
     """Return ``OrderData.Activities`` — the parcel's own event list."""
-    order_data = raw.get(KEY_ORDER_DATA)
-    if not isinstance(order_data, dict):
-        return []
-    activities = order_data.get(KEY_ACTIVITIES)
+    activities = _order_data(raw).get(KEY_ACTIVITIES)
     return activities if isinstance(activities, list) else []
+
+
+def _sender(raw: dict) -> str | None:
+    """Return the shipper's name from ``OrderData.CustomerName``.
+
+    Observed and unambiguous — the captured order carried ``"bol."``. Dynalogic
+    is a contract carrier, so its "customer" is whoever handed it the parcel,
+    which is the sender from the recipient's point of view.
+    """
+    value = _order_data(raw).get(KEY_CUSTOMER_NAME)
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
+# Candidate keys for the addressee's name, used only if ``Addressee`` turns out
+# to be an object. Same approach as `_ACTIVITY_TEXT_KEYS` and for the same
+# reason: the block is personal data, so the one capture we have has it redacted
+# whole and its shape is genuinely unknown.
+_ADDRESSEE_NAME_KEYS = ("Name", "FullName", "Addressee", "ContactName", "CompanyName")
+
+
+def _receiver(raw: dict) -> str | None:
+    """Return the addressee's name from ``OrderData.Addressee``.
+
+    ``Addressee`` is confirmed to exist and confirmed to be personal data, which
+    is exactly why its shape is not: every copy we can look at has the whole
+    block redacted. The reconstruction from the web client suggested an object
+    with ``PostalCode`` / ``CountryName``; the field name reads like a scalar.
+    Both are handled, and an object whose name field we cannot find reports its
+    keys once rather than publishing a silent ``None`` forever.
+    """
+    value = _order_data(raw).get(KEY_ADDRESSEE)
+    if isinstance(value, str):
+        return value.strip() or None
+    if not isinstance(value, dict) or not value:
+        return None
+    for key in _ADDRESSEE_NAME_KEYS:
+        name = value.get(key)
+        if isinstance(name, str) and name.strip():
+            return name.strip()
+    _warn_once(
+        "addressee_shape",
+        "Dynalogic's Addressee block carried no recognised name field, so the "
+        "parcel's recipient is empty. Its keys are: %s (values withheld — this "
+        "block is the recipient's name and address).",
+        sorted(value),
+    )
+    return None
+
+
+def check_order_status(raw: dict) -> None:
+    """Report an ``OrderStatusForAddressee`` value we have not seen before.
+
+    This is the carrier's *own* machine-readable status, and it only surfaced
+    with the first real capture — the reconstruction never saw it. One value is
+    known (``COMPLETED``, on a delivered order). The mapping deliberately does
+    not use it yet: a single known value is not a vocabulary, and swapping a
+    mapping that works for one built on guesswork would be a step backwards.
+    Collecting the domain is what makes it usable as a cross-check on the
+    ``Scenario`` / ``ActiveStep`` / ``TransportResultCode`` triple.
+    """
+    value = raw.get(KEY_ORDER_STATUS)
+    if not isinstance(value, str) or not value.strip():
+        return
+    value = value.strip()
+    if value in KNOWN_ORDER_STATUSES:
+        return
+    _warn_once(
+        f"order_status:{value}",
+        "Dynalogic reported OrderStatusForAddressee=%r, which we have not seen "
+        "before. It is the carrier's own status name and we are collecting its "
+        "values — please say what the carrier's app or website showed for this "
+        "parcel at the same moment.",
+        value,
+    )
 
 
 def _latest_activity_timestamp(raw: dict) -> str | None:
@@ -417,12 +558,12 @@ def check_response_shape(raw: dict) -> None:
     """Report, once, anything about a response we did not expect.
 
     Two things are worth hearing about. **Unknown top-level keys** are the
-    payload telling us what the reconstruction missed — the driver, the stop
-    coordinates and the delayed live position the app renders have to arrive
-    here, and none of them has a name yet. A **``full`` response without
-    ``OrderData``** would mean the postcode was accepted but the two routes
-    split their data differently than read, which would invalidate the decision
-    to require a postcode at all.
+    payload telling us what the reconstruction missed — the first real capture
+    turned up ten of them at once, and the stop coordinates and the delayed live
+    position the app renders for a parcel in transit still have no name. A
+    **``full`` response without ``OrderData``** would mean the postcode was
+    accepted but the two routes split their data differently than read, which
+    would invalidate the decision to require a postcode at all.
 
     Called by the coordinator on a real response only — a parcel the carrier
     404s on is served from a placeholder, which has no shape to check.
@@ -467,6 +608,7 @@ def check_response_shape(raw: dict) -> None:
             KEY_ACTIVITIES,
         )
 
+    check_order_status(raw)
     report_structure(raw)
 
 
@@ -530,17 +672,17 @@ def normalize_parcel(raw: dict, *, include_history: bool = False) -> dict:
     cross-carrier dashboards depend on it. A key the carrier does not expose is
     ``None``, never omitted.
 
-    Six of them are ``None`` for Dynalogic, and deliberately so — this is the
-    list to revisit once a real payload has been captured:
+    The first real capture closed two of the six that shipped as ``None`` in
+    0.9.0 — ``sender`` and ``receiver``. Four remain, deliberately:
 
-    * ``sender`` / ``receiver`` — the ``full`` route returns an ``Addressee``
-      block, but only its ``PostalCode`` and ``CountryName`` were recovered; the
-      name field's spelling is unknown, and inventing one would publish a silent
-      ``None`` forever. The block rides in ``raw`` meanwhile.
-    * ``planned_from`` / ``planned_to`` — no delivery-window field was
-      recovered. The app does show a window, so one almost certainly exists
-      under a name we do not have; :func:`_check_shape` is what will surface it.
-      Until then the calendar and the *next delivery* sensor stay empty.
+    * ``planned_from`` / ``planned_to`` — still no delivery-window field. The
+      one order we have carries its window as **prose inside an activity**
+      ("Afspraak gepland voor vandaag tussen 8:00u en 22:00u"), which is not
+      something to parse: it is localised, it is free text, and the structured
+      field almost certainly exists on an order that has not been delivered yet.
+      ``TransportProgress`` is the suspect — present at top level, ``null`` on a
+      completed order. Until an in-transit capture names it the calendar and the
+      *next delivery* sensor stay empty.
     * ``pickup_point`` — Dynalogic delivers to the door; the drop-off scenarios
       (``DP_*``) are a job type, not a parcel waiting in a shop, so nothing maps
       onto ``at_pickup_point``.
@@ -550,6 +692,12 @@ def normalize_parcel(raw: dict, *, include_history: bool = False) -> dict:
 
     ``weight`` and ``dimensions`` follow the same rule: the carrier is a
     last-mile courier and exposes neither.
+
+    ``barcode`` stays the **order number** (``TrackAndTraceNumber``), not
+    ``OrderData.OrderLines[].Barcode``. The real capture proved the two differ —
+    the order lines carry the physical parcel barcode — but the order number is
+    what the user entered, what the sensor's unique id is built from, and what
+    is present even on a 404 placeholder.
     """
     tracking_code = raw.get(KEY_TRACKING_NUMBER)
     scenario = raw.get(KEY_SCENARIO)
@@ -562,8 +710,8 @@ def normalize_parcel(raw: dict, *, include_history: bool = False) -> dict:
     return {
         "carrier": "Dynalogic",
         "barcode": tracking_code,
-        "sender": None,
-        "receiver": None,
+        "sender": _sender(raw),
+        "receiver": _receiver(raw),
         "status": status,
         "raw_status": raw_status(scenario, active_step, result_code),
         "delivered": delivered,

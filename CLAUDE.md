@@ -41,15 +41,39 @@ domains and the payload reconstruction. Do not duplicate them here.
 
 ### The thing to know before changing anything
 
-**No populated response has ever been observed.** The field names come from the
-vendor's web client, its OpenAPI document declares no success schema for the
-tracking routes, and the app teardown proved the real body is *bigger* than the
-reconstruction — it carries a driver, stop coordinates and a delayed live
-position that no recovered field accounts for. So:
+**Exactly one populated response has ever been observed** — a *delivered* order,
+captured 2026-08-05 from a user's diagnostics, redacted into
+`carrier-research/api/dynalogic/response-full-delivered.json` and into
+`tests/payloads.py`. It corrected two things 0.9.0 asserted:
 
-- **Do not extend `normalize_parcel` by guessing a field name.** Six canonical
-  keys are `None` on purpose and the docstring says why for each. `sender`,
-  `receiver`, `planned_from`, `planned_to`, `pickup_point`, `url`.
+- **`ExecutedDateTime` is naive ISO 8601** (`2026-08-04T13:34:10.507`), not
+  `YYYYMMDDHHmmss`. 0.9.0 accepted only the compact form and therefore dropped
+  *every* timestamp a real order carried — no history, no `delivered_at`, on
+  every parcel. The compact form is still accepted (the web client handles it);
+  neither carries a zone.
+- **The carrier does ship status text.** `DetailCaption` ("Succesvol bezorgd"),
+  `DetailTextLine2`, and a machine-readable `OrderStatusForAddressee`
+  ("COMPLETED"). `raw_status` stays the `DEL_DEF/4/0` triple anyway — the prose
+  is localised and the triple keeps the scenario — but the *reason* recorded in
+  0.9.x ("Dynalogic ships no status text at all") was simply wrong.
+
+**The capture was of a delivered order, which is why the expensive gaps are
+still open**: `TransportProgress` was `null`, there is no delivery-window field
+anywhere, and the driver position and map pins the app renders are still unseen.
+An **in-transit capture** is the one thing left worth asking for. So:
+
+- **Do not extend `normalize_parcel` by guessing a field name.** Four canonical
+  keys are `None` on purpose and the docstring says why for each:
+  `planned_from`, `planned_to`, `pickup_point`, `url`. (`sender` and `receiver`
+  were the other two until the capture named `OrderData.CustomerName` and
+  confirmed `OrderData.Addressee`.)
+- **`Addressee`'s shape is still unknown** — it is personal data, so every copy
+  anyone can look at has it redacted whole. `_receiver` handles a scalar and an
+  object, and reports the keys of an object it cannot find a name in.
+- **`barcode` is the order number, not `OrderLines[].Barcode`.** The capture
+  proved they differ (the latter is `CustomerId` + `CustomerOrderNumber`, the
+  physical label). The order number is what the user typed and what the sensor's
+  unique id is built from.
 - **Every assumption warns once** through `parcels._warn_once`, keyed so the
   different kinds cannot mask each other. The set *is* the pre-1.0 obligation
   for this carrier — do not quiet one without replacing it with a real answer:
@@ -61,6 +85,12 @@ position that no recovered field accounts for. So:
     `TransportResultCode` triple with the status we made of it. The only route
     to the meaning of the 15 undocumented result codes, and the reason the
     issue template asks what the carrier's own app showed at that moment.
+    Triples in `CONFIRMED_COMBINATIONS` are skipped — currently just
+    `DEL_DEF`/4/0, which the capture settled three ways over. **Add to that set
+    only from a capture**, never from reasoning; its whole value is "seen".
+  - `check_order_status` — collects `OrderStatusForAddressee` values. One is
+    known. It is the best candidate to replace the three-field reading outright
+    one day, which is why it is being collected rather than acted on.
   - `report_unknown_parcel` — a 404, once per order number, spelling out the
     three causes. Without it a wrong postcode is a parcel stuck on `unknown`
     with no explanation.
@@ -83,9 +113,10 @@ keeping:
   the distinction survives on `raw_status` and in `raw`.
 - **`*_FAIL` outranks the step** → `problem`. **`RS_DEF` is `returning`** even
   once complete: there is no canonical "returned".
-- **`raw_status` is `"DEL_DEF/3/27"`**, not prose — Dynalogic ships no status
-  text at all, its clients render an icon per step. Inventing a label would be
-  inventing carrier data.
+- **`raw_status` is `"DEL_DEF/3/27"`**, not prose. The carrier *does* ship prose
+  (`DetailCaption`) — 0.9.x claimed otherwise and was wrong — but it is
+  localised Dutch, while the triple is complete, stable and keeps the scenario
+  the canonical status flattens away. The prose rides in `raw`.
 - Swap / correction / repair jobs (`SW_*`, `COR_*`, and the `machinereparatie`
   brand) currently become parcels like any other. Whether they should be
   filtered out is an open scope question, not a mapping detail — the first real
@@ -115,18 +146,26 @@ keeping:
 
 ### Other integration decisions
 
-- **Timestamps are `YYYYMMDDHHmmss` with no offset, read as Europe/Amsterdam.**
-  An assumption; the first real parcel must be checked against the vendor's own
-  app. `_CARRIER_TZ` is built once at import — never per timestamp, and never in
-  the event loop.
+- **Timestamps carry no offset and are read as Europe/Amsterdam.** Still an
+  assumption, and now one with evidence on both sides: a .NET `DateTime` with
+  `Kind=Unspecified` conventionally serialises local time, but the captured
+  order's *"Afspraak gepland voor **vandaag**"* activity is stamped 23:33 the day
+  **before** the window it announces, which only reads correctly as UTC. It
+  needs one parcel whose real delivery time the reporter can state; a wrong
+  reading costs two hours and nothing else. `_CARRIER_TZ` is built once at
+  import — never per timestamp, and never in the event loop.
 - **`delivered_at` is the newest activity's timestamp**, because no
-  delivered-at field exists. Inferred.
+  delivered-at field exists. Inferred, and the capture did not contradict it.
 - **One integration covers eight brands.** The tracking routes take no brand
   parameter. Do not build brand variants and do not derive the host from a
   brand — target `api.dynagroup.nl` directly.
-- **Diagnostics redact whole blocks** (`Addressee`, `ContactInformation`), not
-  leaves: the leaves we do not know the names of are exactly the ones a per-leaf
-  list would miss.
+- **Diagnostics redact whole blocks** (`Addressee`, `ContactInformation`,
+  `TransportConditions`), not leaves: the leaves we do not know the names of are
+  exactly the ones a per-leaf list would miss. **`async_redact_data` matches
+  keys case-sensitively**, so every carrier PascalCase spelling needs listing
+  next to our snake_case one — the capture arrived with `barcode` redacted while
+  `OrderData.OrderLines[].Barcode` and `CustomerOrderNumber` went out in the
+  clear, which is exactly the failure mode. Adding a key is cheap; test it.
 - **Rate limiting is unknown** (a few dozen probes, nothing observed), which is
   why the interval stays user-visible and the default gentle. If reports of
   throttling arrive, this is a `--interval fixed` carrier.

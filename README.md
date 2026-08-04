@@ -10,7 +10,7 @@ A custom Home Assistant integration that tracks your [Dynalogic](https://track.m
 
 **You may be a Dynalogic customer without knowing it.** The same delivery network — and the same tracking — runs behind a number of consumer brands: MediaMarkt, Samsung, Nespresso (machinereparatie), Menken, Dynasure and Dynahealth. If your tracking link points at one of those sites, this integration tracks that parcel.
 
-> **This is a pre-1.0 release.** Dynalogic publishes no documentation for the data it returns, and this integration was built without a real parcel to check it against. The statuses it shows should be right; the delivery window and the recipient details are not mapped yet because we have not seen what they are called. Anything the integration does not recognise is logged as a warning with a link to report it — those reports are what gets this to 1.0.
+> **This is a pre-1.0 release.** Dynalogic publishes no documentation for the data it returns. This integration was built without a real parcel to check it against, and one user's report has since confirmed most of it — including a fix for a bug that was quietly throwing away every parcel's delivery history. What is still missing is the **delivery window**: the only response we have ever seen was of an already-delivered parcel, which does not carry one, so the *next delivery* sensor and the calendar stay empty for now. Anything the integration does not recognise is logged as a warning with a link to report it — those reports are what gets this to 1.0.
 
 Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) family: it publishes the same canonical parcel format, statuses and events as the other carrier integrations, so it plugs straight into the [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) and cross-carrier automations.
 
@@ -38,7 +38,7 @@ Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) 
 
 - Track any number of Dynalogic parcels by order number + postcode — no account needed
 - Covers every brand on the same network (MediaMarkt, Samsung, Nespresso, Menken, Dynasure, Dynahealth)
-- Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the carrier's own status fields and the delivery history
+- Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the sender, the carrier's own status fields and the delivery history
 - Summary sensors: incoming parcels, next delivery, recently delivered parcels
 - Read-only **Deliveries** calendar
 - `dynalogic.track_parcel` / `dynalogic.untrack_parcel` services, so a dashboard button can add a parcel
@@ -166,8 +166,8 @@ logger:
 ## Troubleshooting
 
 - **A parcel shows `unknown`** — Dynalogic does not know that order number with that postcode (yet). The most common cause is a postcode that is not the delivery address; a parcel added through the Configure dialog is checked at that moment, one added through the action is not.
-- **No delivery window, and an empty calendar** — Dynalogic's tracking API has no field for it that we have been able to identify. It may well be in there under a name we have not seen; the integration logs any field it does not recognise, so a report from the log helps.
-- **Warnings in the log** — expected below 1.0, and deliberate. Parts of Dynalogic's response have never been seen in the wild, so the integration reports every assumption it makes: the response's structure (field names and types only, no values — safe to paste), each status combination it maps and what it made of it, an unrecognised scenario or result code, a timestamp it could not parse, and an order number the carrier does not know. Each is logged **once**, not every poll. Please [open an issue](https://github.com/ha-parcel-integrations/ha-dynalogic/issues/new?template=unrecognised_status.yml) with what you see — that is what gets this to 1.0. If you would rather not see them at all, `logger:` can silence `custom_components.dynalogic.parcels`.
+- **No delivery window, and an empty calendar** — Dynalogic's tracking API has no field for it that we have been able to identify. The only full response anyone has shared with us was of a parcel that had already been delivered, and those do not carry a window at all. **If you have a parcel that is still on its way, a diagnostics download from that entry is the single most useful thing you can send us** — it is what would give this integration its calendar. Download it from the integration's ⋮ menu → *Download diagnostics*; everything identifying is stripped out before it is written.
+- **Warnings in the log** — expected below 1.0, and deliberate. Parts of Dynalogic's response have still never been seen, so the integration reports every assumption it makes: the response's structure (field names and types only, no values — safe to paste), each status combination it maps and what it made of it, an unrecognised scenario or result code, a timestamp it could not parse, and an order number the carrier does not know. Each is logged **once**, not every poll. Please [open an issue](https://github.com/ha-parcel-integrations/ha-dynalogic/issues/new?template=unrecognised_status.yml) with what you see — that is what gets this to 1.0. If you would rather not see them at all, `logger:` can silence `custom_components.dynalogic.parcels`.
 
 ## Related integrations
 

@@ -4,8 +4,56 @@ from unittest.mock import MagicMock
 from custom_components.dynalogic.diagnostics import (
     async_get_config_entry_diagnostics,
 )
+from custom_components.dynalogic.parcels import normalize_parcel
 
-from .payloads import ACTIVE_CODE, POSTCODE
+from .payloads import ACTIVE_CODE, POSTCODE, active_sample
+
+
+async def _diagnostics(hass, parcel):
+    """Run diagnostics over one normalised parcel."""
+    entry = MagicMock()
+    entry.options = {
+        "parcels": [{"tracking_code": ACTIVE_CODE, "postal_code": POSTCODE}],
+        "postal_code": POSTCODE,
+    }
+    entry.runtime_data.coordinator.data = [parcel]
+    entry.runtime_data.coordinator.delivered = []
+    return await async_get_config_entry_diagnostics(hass, entry)
+
+
+async def test_diagnostics_redacts_every_identifier_in_a_real_response(hass):
+    """The regression the first real capture exposed.
+
+    `barcode` was redacted while `OrderData.OrderLines[].Barcode` — the physical
+    parcel barcode, and a *different* value — went out in the clear, together
+    with the shipper's own order number and the driver's id. `async_redact_data`
+    matches keys case-sensitively, so each carrier spelling has to be listed
+    next to ours.
+    """
+    result = await _diagnostics(hass, normalize_parcel(active_sample()))
+    parcel = result["incoming"][0]
+    order_data = parcel["raw"]["OrderData"]
+
+    assert parcel["barcode"] == "**REDACTED**"
+    assert parcel["sender"] == "**REDACTED**"
+    assert parcel["receiver"] == "**REDACTED**"
+    assert order_data["OrderLines"][0]["Barcode"] == "**REDACTED**"
+    assert order_data["CustomerOrderNumber"] == "**REDACTED**"
+    assert order_data["OrderId"] == "**REDACTED**"
+    assert order_data["OrderNumber"] == "**REDACTED**"
+    assert order_data["DriverName"] == "**REDACTED**"
+    assert order_data["DriverId"] == "**REDACTED**"
+    assert order_data["Addressee"] == "**REDACTED**"
+    # the recipient's own standing delivery instructions
+    assert order_data["TransportConditions"] == "**REDACTED**"
+
+    # ...and the fields that make diagnostics worth pasting survive.
+    assert parcel["raw"]["Scenario"] == "DEL_DEF"
+    assert parcel["raw"]["ActiveStep"] == 3
+    assert parcel["raw"]["DetailCaption"] == "Onderweg"
+    assert order_data["CustomerName"] == "bol."
+    assert order_data["OrderTypeDescription"] == "Bezorging"
+    assert order_data["Activities"][0]["Description"]
 
 
 async def test_diagnostics_redacts_and_counts(hass):

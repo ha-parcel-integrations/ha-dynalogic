@@ -4,11 +4,13 @@ These need no Home Assistant instance — the whole point of keeping
 ``parcels.py`` free of I/O is that the carrier-specific mapping can be tested
 as plain functions.
 
-Everything here tests the *mapping*, not the carrier: no real Dynalogic
-response has been observed, so a green run means "the code does what we decided
-it should do", never "this is what the carrier sends". The one-shot warnings
-are tested as carefully as the mapping itself, because below 1.0 they are how
-the mapping gets corrected.
+Everything here tests the *mapping*, not the carrier. One real response has now
+been observed — a delivered order — and `payloads.py` is shaped from it, so for
+a delivered parcel a green run does mean "this is what the carrier sends". For
+everything else, and for every parcel still in transit, it still only means
+"the code does what we decided it should do". The one-shot warnings are tested
+as carefully as the mapping itself, because below 1.0 they are how the mapping
+gets corrected.
 """
 from datetime import datetime, timedelta, timezone
 
@@ -25,6 +27,7 @@ from custom_components.dynalogic.const import (
 from custom_components.dynalogic.parcels import (
     apply_delivered_filter,
     build_history,
+    check_order_status,
     check_response_shape,
     describe_structure,
     map_parcel_status,
@@ -38,9 +41,11 @@ from custom_components.dynalogic.parcels import (
 
 from .payloads import (
     ACTIVE_CODE,
+    ADDRESSEE,
     DELIVERED_CODE,
     active_sample,
     activity,
+    addressee_object_sample,
     delivered_sample,
     failed_sample,
     neighbour_sample,
@@ -162,14 +167,44 @@ def test_parse_iso_handles_offsets_naive_and_garbage():
     assert parse_iso(None) is None
 
 
+def test_to_iso_timestamp_reads_the_observed_iso_form():
+    """Naive ISO 8601 with fractional seconds — what the carrier really sends.
+
+    0.9.0 accepted only the compact form and so dropped every timestamp a real
+    order carried, which cost the parcel its history *and* its delivery time.
+    """
+    assert (
+        to_iso_timestamp("2026-08-04T13:34:10.507")
+        == "2026-08-04T13:34:10.507000+02:00"
+    )
+
+
+def test_to_iso_timestamp_accepts_odd_fractional_precision():
+    """The real payload mixes 1-, 2- and 3-digit fractions in one activity list."""
+    assert to_iso_timestamp("2026-08-04T09:12:21.1").startswith("2026-08-04T09:12:21.1")
+    assert to_iso_timestamp("2026-08-04T04:55:54.49").startswith(
+        "2026-08-04T04:55:54.49"
+    )
+    assert to_iso_timestamp("2026-08-04T13:34:10") == "2026-08-04T13:34:10+02:00"
+
+
 def test_to_iso_timestamp_reads_amsterdam_local_time():
-    """`YYYYMMDDHHmmss`, no offset — assumed Europe/Amsterdam, summer time."""
+    """`YYYYMMDDHHmmss`, no offset — the web client's form, still accepted."""
     assert to_iso_timestamp("20260429131242") == "2026-04-29T13:12:42+02:00"
 
 
 def test_to_iso_timestamp_applies_winter_offset():
     """The same assumption in January, to prove it is a zone and not +02:00."""
     assert to_iso_timestamp("20260105080000") == "2026-01-05T08:00:00+01:00"
+    assert to_iso_timestamp("2026-01-05T08:00:00") == "2026-01-05T08:00:00+01:00"
+
+
+def test_to_iso_timestamp_trusts_an_explicit_offset():
+    """Only a zone-less stamp gets the Amsterdam assumption applied to it."""
+    assert to_iso_timestamp("2026-08-04T13:34:10Z") == "2026-08-04T13:34:10+00:00"
+    assert (
+        to_iso_timestamp("2026-08-04T13:34:10+05:00") == "2026-08-04T13:34:10+05:00"
+    )
 
 
 def test_to_iso_timestamp_ignores_empty_values():
@@ -178,10 +213,10 @@ def test_to_iso_timestamp_ignores_empty_values():
 
 
 def test_to_iso_timestamp_warns_once_on_another_format(caplog):
-    """If the format assumption is wrong, the user hears about it."""
-    assert to_iso_timestamp("2026-04-29T13:12:42Z") is None
-    assert to_iso_timestamp("2026-04-29T13:12:42Z") is None
-    assert caplog.text.count("YYYYMMDDHHmmss") == 1
+    """If both format assumptions are wrong, the user hears about it."""
+    assert to_iso_timestamp("29-04-2026 13:12") is None
+    assert to_iso_timestamp("29-04-2026 13:12") is None
+    assert caplog.text.count("format we cannot read") == 1
 
 
 # ---------------------------------------------------------------------------
@@ -190,10 +225,14 @@ def test_to_iso_timestamp_warns_once_on_another_format(caplog):
 
 
 def test_build_history_orders_oldest_to_newest():
+    """The captured order's six activities, oldest first.
+
+    They arrive newest-first on the wire, which is the reason this sorts at all.
+    """
     history = build_history(delivered_sample()["OrderData"]["Activities"])
-    assert len(history) == 4
-    assert history[0]["raw_status"] == "Zending aangemeld"
-    assert history[-1]["raw_status"] == "Afgeleverd"
+    assert len(history) == 6
+    assert history[0]["raw_status"].startswith("De transportdata is bij ons aangemeld")
+    assert history[-1]["raw_status"] == "Opdracht succesvol uitgevoerd"
 
 
 def test_build_history_never_maps_a_canonical_status():
@@ -243,12 +282,14 @@ def test_check_response_shape_reports_the_structure_of_a_known_payload(caplog):
 
 
 def test_check_response_shape_never_logs_a_value(caplog):
-    raw = delivered_sample()
+    raw = addressee_object_sample()
     raw["OrderData"]["Addressee"]["Name"] = "Jane Doe"
     check_response_shape(raw)
     assert "OrderData.Addressee.Name: str" in caplog.text
     assert "Jane Doe" not in caplog.text
-    assert "Afgeleverd" not in caplog.text
+    assert "Opdracht succesvol uitgevoerd" not in caplog.text
+    # Nor the identifiers, which are not personal but do resolve to one parcel.
+    assert "18987" not in caplog.text
 
 
 def test_check_response_shape_reports_each_distinct_shape_once(caplog):
@@ -284,6 +325,29 @@ def test_check_response_shape_reports_missing_status_fields(caplog):
     del raw["ActiveStep"]
     check_response_shape(raw)
     assert "arrived without ['Scenario', 'ActiveStep']" in caplog.text
+
+
+def test_check_order_status_is_quiet_about_the_value_we_know(caplog):
+    check_order_status(delivered_sample())
+    assert caplog.text == ""
+
+
+def test_check_order_status_collects_a_new_value(caplog):
+    """The carrier's own status name — one value known, the domain unknown."""
+    raw = delivered_sample()
+    raw["OrderStatusForAddressee"] = "IN_TRANSIT"
+    check_order_status(raw)
+    check_order_status(raw)
+    assert caplog.text.count("OrderStatusForAddressee='IN_TRANSIT'") == 1
+    assert "issues/new" in caplog.text
+
+
+def test_check_order_status_ignores_a_response_without_one(caplog):
+    raw = delivered_sample()
+    del raw["OrderStatusForAddressee"]
+    check_order_status(raw)
+    check_order_status({"OrderStatusForAddressee": "  "})
+    assert caplog.text == ""
 
 
 def test_check_response_shape_reports_an_empty_activity_list(caplog):
@@ -337,8 +401,19 @@ def test_each_status_combination_is_reported_once(caplog):
     assert caplog.text.count("TransportResultCode=27") == 1
     assert "reads as 'out_for_delivery'" in caplog.text
 
-    map_parcel_status("DEL_DEF", 4, 0)
-    assert "TransportResultCode=0" in caplog.text
+
+def test_the_one_confirmed_combination_is_not_reported(caplog):
+    """`DEL_DEF`/4/0 was captured from a real order — do not re-ask about it.
+
+    Every parcel ends up here, so without the exemption the case we are sure of
+    would be the loudest line in the log.
+    """
+    assert map_parcel_status("DEL_DEF", 4, 0) == ParcelStatus.DELIVERED
+    assert caplog.text == ""
+    # A neighbour delivery reaches the same status by a scenario nobody has
+    # captured, so that one still asks.
+    map_parcel_status("DEL_NB", 4, 0)
+    assert "Scenario=DEL_NB" in caplog.text
 
 
 def test_a_parcel_without_any_status_field_is_not_reported(caplog):
@@ -392,14 +467,53 @@ def test_normalize_delivered_parcel():
     assert parcel["raw_status"] == "DEL_DEF/4/0"
     assert parcel["delivered"] is True
     # No delivered-at field exists; the newest activity is the delivery.
-    assert parcel["delivered_at"] == "2026-04-29T13:12:42+02:00"
+    assert parcel["delivered_at"] == "2026-08-04T13:34:10.507000+02:00"
     assert parcel["history"] is None  # opt-in, default off
+
+
+def test_normalize_reads_the_shipper_and_the_addressee():
+    """`CustomerName` is the shipper — Dynalogic's customer, not the recipient."""
+    parcel = normalize_parcel(delivered_sample())
+    assert parcel["sender"] == "bol."
+    assert parcel["receiver"] == ADDRESSEE
+
+
+def test_normalize_reads_an_addressee_object_too():
+    """The block's shape is unknown because it is redacted everywhere."""
+    assert normalize_parcel(addressee_object_sample())["receiver"] == ADDRESSEE
+
+
+def test_normalize_reports_an_addressee_it_cannot_read(caplog):
+    """Better a reported gap than a silent `None` forever."""
+    raw = addressee_object_sample()
+    raw["OrderData"]["Addressee"] = {"Straat": "Kerkstraat 1"}
+    parcel = normalize_parcel(raw)
+    assert parcel["receiver"] is None
+    assert "Straat" in caplog.text
+    assert "Kerkstraat" not in caplog.text
+
+
+def test_normalize_tolerates_a_missing_shipper_and_addressee():
+    raw = delivered_sample()
+    del raw["OrderData"]["CustomerName"]
+    del raw["OrderData"]["Addressee"]
+    parcel = normalize_parcel(raw)
+    assert parcel["sender"] is None
+    assert parcel["receiver"] is None
+
+
+def test_normalize_barcode_is_the_order_number_not_the_parcel_barcode():
+    """The capture proved the two differ; the sensor's identity is the former."""
+    parcel = normalize_parcel(delivered_sample())
+    assert parcel["barcode"] == DELIVERED_CODE
+    order_lines = parcel["raw"]["OrderData"]["OrderLines"]
+    assert order_lines[0]["Barcode"] != parcel["barcode"]
 
 
 def test_normalize_fields_this_carrier_does_not_expose_are_none():
     """Not oversights — see `normalize_parcel`'s docstring for each one."""
     parcel = normalize_parcel(delivered_sample())
-    for key in ("sender", "receiver", "planned_from", "planned_to"):
+    for key in ("planned_from", "planned_to"):
         assert parcel[key] is None, key
     for key in ("pickup_point", "url", "weight", "dimensions"):
         assert parcel[key] is None, key
@@ -426,8 +540,8 @@ def test_normalize_failed_delivery_is_a_problem():
 
 def test_normalize_history_is_opt_in():
     parcel = normalize_parcel(delivered_sample(), include_history=True)
-    assert len(parcel["history"]) == 4
-    assert parcel["history"][-1]["timestamp"] == "2026-04-29T13:12:42+02:00"
+    assert len(parcel["history"]) == 6
+    assert parcel["history"][-1]["timestamp"] == "2026-08-04T13:34:10.507000+02:00"
 
 
 def test_normalize_history_survives_a_response_without_order_data():

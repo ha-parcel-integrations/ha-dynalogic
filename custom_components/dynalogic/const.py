@@ -119,23 +119,36 @@ KNOWN_SCENARIOS = frozenset(
 MIN_ACTIVE_STEP = 1
 MAX_ACTIVE_STEP = 4
 
-# Payload keys. Named as constants because the payload shape is reconstructed
-# from the vendor's web client rather than observed, so every read of a field we
-# have never actually seen populated is greppable from one place.
-KEY_TRACKING_NUMBER = "TrackAndTraceNumber"
-KEY_RESULT_CODE = "TransportResultCode"
-KEY_SCENARIO = "Scenario"
-KEY_ACTIVE_STEP = "ActiveStep"
-KEY_ORDER_DATA = "OrderData"
-KEY_ACTIVITIES = "Activities"
-KEY_EXECUTED = "ExecutedDateTime"
-KEY_ADDRESSEE = "Addressee"
-KEY_CONTACT = "ContactInformation"
+# Payload keys. Named as constants because most of the payload shape was
+# reconstructed from the vendor's web client before one real response existed,
+# so every read of a field is greppable from one place.
+#
+# The keys below marked *observed* were confirmed against a real delivered
+# `full` response (captured 2026-08-05, one order, redacted copy in
+# `carrier-research/api/dynalogic/`). The rest are still reconstruction.
+KEY_TRACKING_NUMBER = "TrackAndTraceNumber"   # observed
+KEY_RESULT_CODE = "TransportResultCode"       # observed
+KEY_SCENARIO = "Scenario"                     # observed
+KEY_ACTIVE_STEP = "ActiveStep"                # observed
+KEY_ORDER_DATA = "OrderData"                  # observed
+KEY_ACTIVITIES = "Activities"                 # observed
+KEY_EXECUTED = "ExecutedDateTime"             # observed
+KEY_ADDRESSEE = "Addressee"                   # observed (shape redacted, see below)
+KEY_CONTACT = "ContactInformation"            # observed (shape redacted)
+KEY_CUSTOMER_NAME = "CustomerName"            # observed — the shipper, e.g. "bol."
+KEY_ORDER_STATUS = "OrderStatusForAddressee"  # observed — "COMPLETED"
+
+# The carrier's own machine-readable status, alongside the three-field triple.
+# One value has been seen; the domain is unknown, so anything else warns once —
+# collecting it is how this becomes usable as a cross-check on the mapping.
+KNOWN_ORDER_STATUSES = frozenset({"COMPLETED"})
 
 # Top-level keys we know about. Anything else in a real response is schema
-# drift worth hearing about — the reconstruction is known to be *incomplete*
-# (the app renders a driver, map pins and a delayed live position that no
-# recovered field accounts for), so this set is expected to grow.
+# drift worth hearing about. Ten of these were unknown until the first real
+# capture, which is the measure of how partial the reconstruction was — and it
+# is still partial: that capture was a *delivered* order, so the delivery
+# window, the driver position and the map pins the app renders for a parcel in
+# transit have still never been seen.
 KNOWN_TOP_LEVEL_KEYS = frozenset(
     {
         KEY_TRACKING_NUMBER,
@@ -144,13 +157,37 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
         KEY_ACTIVE_STEP,
         KEY_ORDER_DATA,
         KEY_CONTACT,
+        KEY_ORDER_STATUS,
+        # Prose the carrier's own page renders under the progress bar.
+        "DetailCaption",
+        "DetailTextLine1",
+        "DetailTextLine2",
+        # Per-step render state for the four-dot progress bar; `ActiveStep`
+        # already says the same thing in one integer.
+        "ProgressData",
+        # Null on the delivered order we have. The prime suspect for the
+        # delivery window and the delayed live position — see `parcels.py`.
+        "TransportProgress",
+        "OrderGroup",
+        "CustomerId",
+        "OnlineAppointmentEnabled",
+        "PushNotificationsEnabled",
     }
 )
 
-# `ExecutedDateTime` is `YYYYMMDDHHmmss` with no offset anywhere in it, and the
-# carrier is a Dutch last-mile operation, so Amsterdam is the assumption. It is
-# an *assumption*: the first real parcel must be checked against it, which is
-# what the one-shot timestamp warning in `parcels.py` is for.
+# `ExecutedDateTime` arrives as a naive ISO 8601 stamp — `2026-08-04T13:34:10.507`,
+# fractional seconds of any length, **no offset**. The vendor's *web* client also
+# handles a compact `YYYYMMDDHHmmss` form (its `dynadatetime` pipe branches on a
+# bare 14-digit match), so both are accepted; only ISO has been seen on the wire.
+#
+# Neither form carries a zone, and Amsterdam remains an *assumption* — a .NET
+# `DateTime` with `Kind=Unspecified` conventionally serialises local time, and
+# the carrier is a Dutch last-mile operation. There is real counter-evidence:
+# the captured order's "Afspraak gepland voor vandaag" activity is stamped
+# 23:33 on the day *before* the window it announces, which reads correctly only
+# if the stamp is UTC. Unresolved; it needs one parcel whose real delivery time
+# the reporter can state. Until then a wrong reading costs two hours on
+# `delivered_at` and on every history entry, and nothing else.
 CARRIER_TIMEZONE = "Europe/Amsterdam"
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 
