@@ -50,12 +50,24 @@ position that no recovered field accounts for. So:
 - **Do not extend `normalize_parcel` by guessing a field name.** Six canonical
   keys are `None` on purpose and the docstring says why for each. `sender`,
   `receiver`, `planned_from`, `planned_to`, `pickup_point`, `url`.
-- **Every assumption warns once** through `parcels._warn_once`: an unknown
-  scenario, an unknown result code, an out-of-range step, a timestamp that is
-  not `YYYYMMDDHHmmss`, an activity with no recognised description, an
-  unexpected top-level key, and a `full` response without `OrderData`. That set
-  *is* the pre-1.0 obligation for this carrier — do not quiet one without
-  replacing it with a real answer.
+- **Every assumption warns once** through `parcels._warn_once`, keyed so the
+  different kinds cannot mask each other. The set *is* the pre-1.0 obligation
+  for this carrier — do not quiet one without replacing it with a real answer:
+  - `report_structure` — the whole payload as `path: type` lines, keyed on the
+    shape itself so a delivered parcel reports separately from an in-transit
+    one. **This is the one that matters**: it is what will name the delivery
+    window and the driver. Types only, so it is safe for a user to paste.
+  - `_report_combination` — every distinct `Scenario`/`ActiveStep`/
+    `TransportResultCode` triple with the status we made of it. The only route
+    to the meaning of the 15 undocumented result codes, and the reason the
+    issue template asks what the carrier's own app showed at that moment.
+  - `report_unknown_parcel` — a 404, once per order number, spelling out the
+    three causes. Without it a wrong postcode is a parcel stuck on `unknown`
+    with no explanation.
+  - plus: unknown scenario, unknown result code, out-of-range step, a
+    timestamp that is not `YYYYMMDDHHmmss`, an activity with no recognised
+    description, unexpected top-level keys, a missing status field, a `full`
+    response without `OrderData`, and an empty `Activities` list.
 - `check_response_shape` runs in the **coordinator**, on real responses only.
   The 404 placeholder is ours and has no shape to complain about.
 

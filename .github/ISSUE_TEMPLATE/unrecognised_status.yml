@@ -8,23 +8,43 @@ body:
   - type: markdown
     attributes:
       value: |
-        The integration logs a warning such as
+        **This integration was built without ever seeing a real Dynalogic
+        response**, so below 1.0 it logs a warning for every assumption it
+        makes. Each one ends with a link to this form. Anything you paste here
+        is genuinely useful — these reports are what gets it to 1.0.
+
+        The most valuable one is the structure listing:
 
         ```
-        Unrecognised Dynalogic status — help us map it. Open an issue
-        and paste this line: …
-          status=… → reported as 'unknown'
+        Dynalogic response structure (field names and types only, no values
+        — safe to paste). …
+            ActiveStep: int
+            OrderData.Activities[].ExecutedDateTime: str
+            …
         ```
 
-        Paste that full line below and we'll add it to the mapping.
+        It contains **field names and types only** — no addresses, names or
+        order numbers — so it is safe to paste in full. The other warnings
+        (an unrecognised scenario or result code, a timestamp we could not
+        parse, a status combination we may have read wrong) are just as welcome.
   - type: textarea
     id: logline
     attributes:
-      label: The log line
-      description: Copy the full "help us map it" warning line from your Home Assistant log.
+      label: The log line(s)
+      description: Copy the full warning from your Home Assistant log — the whole block, including the indented lines under it.
       render: text
     validations:
       required: true
+  - type: textarea
+    id: reality
+    attributes:
+      label: What did Dynalogic itself say at that moment?
+      description: >-
+        Only if the warning was about a status. What the carrier's own app or
+        tracking page showed for this parcel — "out for delivery", "delivered
+        to the neighbour", the delivery window it displayed. That sentence is
+        what turns a status code into a meaning; we cannot look it up anywhere.
+      placeholder: "e.g. the app showed 'onderweg, tussen 14:00 en 16:00'"
   - type: input
     id: version
     attributes:

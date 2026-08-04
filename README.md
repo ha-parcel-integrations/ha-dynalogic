@@ -167,7 +167,7 @@ logger:
 
 - **A parcel shows `unknown`** — Dynalogic does not know that order number with that postcode (yet). The most common cause is a postcode that is not the delivery address; a parcel added through the Configure dialog is checked at that moment, one added through the action is not.
 - **No delivery window, and an empty calendar** — Dynalogic's tracking API has no field for it that we have been able to identify. It may well be in there under a name we have not seen; the integration logs any field it does not recognise, so a report from the log helps.
-- **A warning about an unrecognised status, timestamp or field** — that is the integration asking for help, and it is why this release is below 1.0: parts of Dynalogic's response have never been seen in the wild. Please [open an issue](https://github.com/ha-parcel-integrations/ha-dynalogic/issues/new?template=unrecognised_status.yml) with the logged line.
+- **Warnings in the log** — expected below 1.0, and deliberate. Parts of Dynalogic's response have never been seen in the wild, so the integration reports every assumption it makes: the response's structure (field names and types only, no values — safe to paste), each status combination it maps and what it made of it, an unrecognised scenario or result code, a timestamp it could not parse, and an order number the carrier does not know. Each is logged **once**, not every poll. Please [open an issue](https://github.com/ha-parcel-integrations/ha-dynalogic/issues/new?template=unrecognised_status.yml) with what you see — that is what gets this to 1.0. If you would rather not see them at all, `logger:` can silence `custom_components.dynalogic.parcels`.
 
 ## Related integrations
 

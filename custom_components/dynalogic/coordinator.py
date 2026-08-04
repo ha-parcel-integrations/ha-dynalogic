@@ -33,6 +33,7 @@ from .parcels import (
     apply_delivered_filter,
     check_response_shape,
     normalize_parcel,
+    report_unknown_parcel,
     sort_parcels_by_ts,
 )
 
@@ -169,9 +170,10 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
                 # to it, or an order the carrier has not created yet. Keep prior
                 # data if we have it, otherwise show a pending placeholder so
                 # the user still sees the parcel they asked us to track.
-                raws.append(
-                    self._raw_cache.get(code) or {KEY_TRACKING_NUMBER: code}
-                )
+                cached = self._raw_cache.get(code)
+                if cached is None:
+                    report_unknown_parcel(code)
+                raws.append(cached or {KEY_TRACKING_NUMBER: code})
                 continue
 
             # The response's own tracking number can be missing on edge

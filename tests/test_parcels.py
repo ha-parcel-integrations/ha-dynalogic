@@ -26,10 +26,12 @@ from custom_components.dynalogic.parcels import (
     apply_delivered_filter,
     build_history,
     check_response_shape,
+    describe_structure,
     map_parcel_status,
     normalize_parcel,
     parse_iso,
     raw_status,
+    report_unknown_parcel,
     sort_parcels_by_ts,
     to_iso_timestamp,
 )
@@ -232,23 +234,124 @@ def test_build_history_does_not_log_activity_values(caplog):
 # ---------------------------------------------------------------------------
 
 
-def test_check_response_shape_is_silent_on_a_known_payload(caplog):
+def test_check_response_shape_reports_the_structure_of_a_known_payload(caplog):
+    """Even a payload we fully understand is worth one listing: nobody has ever
+    seen a real one, so the shape itself is the finding."""
     check_response_shape(delivered_sample())
-    assert caplog.text == ""
+    assert "OrderData.Activities[].ExecutedDateTime: str" in caplog.text
+    assert "TransportResultCode: int" in caplog.text
 
 
-def test_check_response_shape_reports_unknown_keys_once(caplog):
+def test_check_response_shape_never_logs_a_value(caplog):
+    raw = delivered_sample()
+    raw["OrderData"]["Addressee"]["Name"] = "Jane Doe"
+    check_response_shape(raw)
+    assert "OrderData.Addressee.Name: str" in caplog.text
+    assert "Jane Doe" not in caplog.text
+    assert "Afgeleverd" not in caplog.text
+
+
+def test_check_response_shape_reports_each_distinct_shape_once(caplog):
     raw = delivered_sample()
     raw["EstimatedDeliveryWindow"] = {"From": "20260429130000"}
     check_response_shape(raw)
     check_response_shape(raw)
-    assert caplog.text.count("EstimatedDeliveryWindow") == 1
+    assert caplog.text.count("EstimatedDeliveryWindow: object") == 0
+    assert caplog.text.count("EstimatedDeliveryWindow.From: str") == 1
+    # ...and it is still called out as a field we do not map.
+    assert caplog.text.count("fields we do not map yet") == 1
+
+
+def test_check_response_shape_reports_a_new_shape_again(caplog):
+    """A delivered parcel may carry fields an in-transit one does not."""
+    check_response_shape(active_sample())
+    caplog.clear()
+    extended = active_sample()
+    extended["DriverName"] = "x"
+    check_response_shape(extended)
+    assert "DriverName: str" in caplog.text
 
 
 def test_check_response_shape_reports_a_full_response_without_order_data(caplog):
     """That would mean the two routes split their data differently than read."""
     check_response_shape(partial_sample())
-    assert "OrderData" in caplog.text
+    assert "arrived without OrderData" in caplog.text
+
+
+def test_check_response_shape_reports_missing_status_fields(caplog):
+    raw = delivered_sample()
+    del raw["Scenario"]
+    del raw["ActiveStep"]
+    check_response_shape(raw)
+    assert "arrived without ['Scenario', 'ActiveStep']" in caplog.text
+
+
+def test_check_response_shape_reports_an_empty_activity_list(caplog):
+    raw = delivered_sample()
+    raw["OrderData"]["Activities"] = []
+    check_response_shape(raw)
+    assert "no Activities" in caplog.text
+
+
+# ---------------------------------------------------------------------------
+# describe_structure
+# ---------------------------------------------------------------------------
+
+
+def test_describe_structure_lists_paths_and_types_only():
+    assert describe_structure(
+        {"A": 1, "B": {"C": "x"}, "D": [{"E": True}], "F": None}
+    ) == [
+        "A: int",
+        "B.C: str",
+        "D[].E: bool",
+        "F: NoneType",
+    ]
+
+
+def test_describe_structure_marks_empty_containers():
+    assert describe_structure({"A": {}, "B": []}) == ["A: empty object", "B[]: empty list"]
+
+
+def test_describe_structure_stops_at_a_depth_cap():
+    """A self-referential or absurd payload must not turn a log into a hang."""
+    deep: dict = {}
+    node = deep
+    for _ in range(12):
+        node["next"] = {}
+        node = node["next"]
+    lines = describe_structure(deep)
+    assert len(lines) == 1
+    assert "nested deeper than" in lines[0]
+
+
+# ---------------------------------------------------------------------------
+# the status-combination report
+# ---------------------------------------------------------------------------
+
+
+def test_each_status_combination_is_reported_once(caplog):
+    """The only route to the meaning of the 15 undocumented result codes."""
+    map_parcel_status("DEL_DEF", 3, 27)
+    map_parcel_status("DEL_DEF", 3, 27)
+    assert caplog.text.count("TransportResultCode=27") == 1
+    assert "reads as 'out_for_delivery'" in caplog.text
+
+    map_parcel_status("DEL_DEF", 4, 0)
+    assert "TransportResultCode=0" in caplog.text
+
+
+def test_a_parcel_without_any_status_field_is_not_reported(caplog):
+    """The 404 placeholder is ours; there is nothing to learn from it."""
+    map_parcel_status(None, None, None)
+    assert caplog.text == ""
+
+
+def test_report_unknown_parcel_explains_the_three_causes(caplog):
+    report_unknown_parcel("1234567890")
+    report_unknown_parcel("1234567890")
+    assert caplog.text.count("1234567890") == 1
+    assert "postcode is not the delivery address" in caplog.text
 
 
 # ---------------------------------------------------------------------------

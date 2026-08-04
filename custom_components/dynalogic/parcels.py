@@ -90,6 +90,25 @@ def _warn_once(key: str, message: str, *args: Any) -> None:
     )
 
 
+def report_unknown_parcel(tracking_code: str) -> None:
+    """Report, once per order number, that the carrier does not know it.
+
+    Without this the parcel simply sits at ``unknown`` forever and the user has
+    no idea why. The three causes are worth spelling out, because the second is
+    by far the most common and the least obvious: Dynalogic answers the same
+    bare 404 for an unknown order number, for a postcode that is not the one
+    the parcel is being delivered to, and for an order it has not created yet.
+    """
+    _warn_once(
+        f"not_found:{tracking_code}",
+        "Dynalogic does not know order number %s with the postcode you gave "
+        "it. Either the order number is wrong, the postcode is not the "
+        "delivery address for this parcel, or the carrier has not registered "
+        "the order yet — the last one resolves itself.",
+        tracking_code,
+    )
+
+
 def _coerce_result_code(value: Any) -> int | None:
     """Return ``TransportResultCode`` as an int, or ``None`` if it is absent.
 
@@ -174,8 +193,18 @@ def map_parcel_status(
         step = None
 
     if scenario is None and step is None:
+        # A parcel the carrier 404s on: nothing to map and nothing to report.
         return ParcelStatus.UNKNOWN
 
+    status = _status_for(scenario, step, code)
+    _report_combination(scenario, step, code, status)
+    return status
+
+
+def _status_for(
+    scenario: str | None, step: int | None, code: int | None
+) -> ParcelStatus:
+    """Apply the mapping rules — see :func:`map_parcel_status` for the why."""
     if scenario is not None and scenario.endswith("_FAIL"):
         return ParcelStatus.PROBLEM
     if scenario == "RS_DEF":
@@ -189,6 +218,31 @@ def map_parcel_status(
     if step == 2:
         return ParcelStatus.IN_TRANSIT
     return ParcelStatus.REGISTERED
+
+
+def _report_combination(
+    scenario: str | None, step: int | None, code: int | None, status: ParcelStatus
+) -> None:
+    """Report each distinct status combination once, with what we made of it.
+
+    This is the one that settles ``TransportResultCode``. Fifteen of its
+    sixteen values have no known meaning, and the only way to learn them is to
+    see which combination a real parcel carries at a moment its owner can
+    describe ("it was on the van when this fired"). One line per distinct
+    combination is a bounded amount of noise — at most a handful per parcel —
+    and it is the difference between guessing the vocabulary and knowing it.
+    """
+    _warn_once(
+        f"combination:{scenario}/{step}/{code}",
+        "Dynalogic reported Scenario=%s ActiveStep=%s TransportResultCode=%s, "
+        "which this integration reads as '%s'. Only result code 0 has a "
+        "documented meaning, so if that does not match what Dynalogic's own "
+        "app or website shows for this parcel, we have it wrong.",
+        scenario,
+        step,
+        code,
+        status,
+    )
 
 
 def raw_status(scenario: Any, active_step: Any, result_code: Any) -> str | None:
@@ -258,6 +312,10 @@ def to_iso_timestamp(value: Any) -> str | None:
 # element is unseen, so the description is looked for under the names a .NET DTO
 # would plausibly use, and the ones that miss are reported by
 # :func:`_activity_text` rather than silently yielding a blank history.
+# The three fields every transport order must carry — they are the status.
+# Their absence from a real response is a bigger surprise than an extra field.
+_EXPECTED_KEYS = (KEY_SCENARIO, KEY_ACTIVE_STEP, KEY_RESULT_CODE)
+
 _ACTIVITY_TEXT_KEYS = (
     "Description",
     "ActivityDescription",
@@ -380,13 +438,88 @@ def check_response_shape(raw: dict) -> None:
             "withheld — they may contain personal data).",
             unexpected,
         )
+
+    missing = [key for key in _EXPECTED_KEYS if key not in raw]
+    if missing:
+        _warn_once(
+            "missing_keys:" + ",".join(missing),
+            "A Dynalogic response arrived without %s. Those fields carry the "
+            "parcel's status, so it will show as 'unknown' or worse.",
+            missing,
+        )
+
     if KEY_ORDER_DATA not in raw:
         _warn_once(
             "missing_order_data",
             "A Dynalogic response arrived without %s, so this parcel has no "
-            "history. That is unexpected when a postcode was supplied.",
+            "history. That is unexpected when a postcode was supplied — it "
+            "would mean the two tracking routes divide their data differently "
+            "than we read them.",
             KEY_ORDER_DATA,
         )
+    elif not _activities(raw):
+        _warn_once(
+            "empty_activities",
+            "A Dynalogic response carried %s but no %s, so there is no history "
+            "and no delivery timestamp. Either the list is genuinely empty for "
+            "this parcel, or it lives under another name.",
+            KEY_ORDER_DATA,
+            KEY_ACTIVITIES,
+        )
+
+    report_structure(raw)
+
+
+# How deep the structure report walks. Six levels is well past anything the
+# reconstruction suggests; the cap is there so a self-referential or absurdly
+# nested payload cannot turn a log line into a hang.
+_MAX_STRUCTURE_DEPTH = 6
+
+
+def describe_structure(value: Any, path: str = "", depth: int = 0) -> list[str]:
+    """Return the payload's shape as ``path: type`` lines, **values omitted**.
+
+    A response we have never seen is worth more as a map than as a complaint:
+    this is what tells us the delivery window is called
+    ``PlannedDeliveryWindow.From`` rather than that "some field is missing". A
+    list is described by its first element — the shape is the point, not the
+    count — and only the *types* of leaves are reported, so a name, an address
+    or a set of coordinates can never end up in a log a user pastes publicly.
+    """
+    if depth >= _MAX_STRUCTURE_DEPTH:
+        return [f"{path}: … (nested deeper than {_MAX_STRUCTURE_DEPTH})"]
+    if isinstance(value, dict):
+        if not value:
+            return [f"{path}: empty object"]
+        lines: list[str] = []
+        for key in sorted(value):
+            child = f"{path}.{key}" if path else key
+            lines += describe_structure(value[key], child, depth + 1)
+        return lines
+    if isinstance(value, list):
+        if not value:
+            return [f"{path}[]: empty list"]
+        return describe_structure(value[0], f"{path}[]", depth + 1)
+    return [f"{path}: {type(value).__name__}"]
+
+
+def report_structure(raw: dict) -> None:
+    """Log the full shape of a response once per distinct shape.
+
+    Keyed on the shape itself rather than on "first response ever", so a
+    delivered parcel that carries fields an in-transit one does not — a proof
+    of delivery, a neighbour's details — reports as well. Distinct shapes are
+    few; this is not per-parcel noise.
+    """
+    lines = describe_structure(raw)
+    _warn_once(
+        "structure:" + "|".join(lines),
+        "Dynalogic response structure (field names and types only, no values "
+        "— safe to paste). This integration was built without ever seeing a "
+        "real response, so this listing is the single most useful thing you "
+        "can send us:\n    %s",
+        "\n    ".join(lines),
+    )
 
 
 def normalize_parcel(raw: dict, *, include_history: bool = False) -> dict:
