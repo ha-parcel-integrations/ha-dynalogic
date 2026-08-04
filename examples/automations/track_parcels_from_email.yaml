@@ -1,0 +1,133 @@
+# Extract Dynalogic order numbers from incoming e-mail and register them
+# with `dynalogic.track_parcel`, so parcels start tracking the moment the
+# shipping confirmation lands in your inbox — no manual entry.
+#
+# Requirements:
+#   - one or more core IMAP config entries with "text" enabled under
+#     "message data" and the max message size raised (carrier mails are
+#     long) — full setup guide and pitfalls: track_parcels_from_email.md
+#   - optional: an `ai_task` entity for the AI fallback branch; delete
+#     the whole `else:` block if you don't use one
+#   - the postcode comes from the integration's own setup — `track_parcel`
+#     falls back to it, so the automation never has to know an address
+#   - PRIVACY: by default this fires on EVERY incoming mail and (with the
+#     AI branch) can send mail bodies to your AI Task. Scope the IMAP
+#     search to the carrier's sender first — see "Scope & privacy" in the .md.
+#
+# The regex is deliberately written without backslashes (`(?<![0-9A-Za-z])`
+# instead of `\b`, `[0-9]` instead of `\d`): Jinja treats `\b` inside a
+# string literal as a backspace escape, so the pattern would silently
+# never match.
+
+alias: "Dynalogic: track from e-mail"
+description: >-
+  Listens to imap_content events from all IMAP entries. Fast regex path for
+  Dynalogic order numbers in mails that reference a Dynalogic tracking host;
+  optional AI fallback for mails whose layout the regex does not recognise.
+mode: queued
+max: 10
+
+triggers:
+  - trigger: event
+    event_type: imap_content
+
+variables:
+  sender: "{{ trigger.event.data.sender | default('') | lower }}"
+  subject: "{{ trigger.event.data.subject | default('') }}"
+  body: "{{ trigger.event.data.text | default('') }}"
+  content: "{{ subject ~ ' ' ~ body }}"
+  # Dynalogic publishes NO order-number format — no prefix, no fixed length,
+  # and its own site validates none. So this recipe cannot anchor on the code
+  # itself the way the other carriers' can. Instead it first establishes that
+  # the mail really is a Dynalogic one (its tracking links point at one of the
+  # brand hosts below), and only then picks up a labelled number.
+  #
+  # Widen the label list to match your own mails; the AI fallback catches the
+  # layouts it misses.
+  is_dynalogic_mail: >-
+    {{ content is search('mydynalogic|dynagroup|dynalogic|track-en-trace.mediamarkt|mymenken|dynasure|mydynahealth|machinereparatie') }}
+  dynalogic_codes: >-
+    {{ (content | regex_findall('(?:[Oo]rdernummer|[Oo]rder number|[Zz]endingsnummer|[Tt]racking(?:code| number)?)[: ]+([0-9A-Za-z]{6,20})')
+        if is_dynalogic_mail else []) | unique | list }}
+  # Keyword gate for the AI fallback — localise to your language(s).
+  is_parcel_mail: >-
+    {{ content | lower is search('pakket|bezorg|track|verzonden|onderweg|zending|shipment|delivery|levering') }}
+
+conditions:
+  # initial=true means "new message"; false means a duplicate trigger of
+  # the SAME message (e.g. after a reconnect) — requiring it is free dedup.
+  - condition: template
+    value_template: "{{ trigger.event.data.initial | default(true) }}"
+  # Unlike the other carriers in this family, the gate is the *sender/brand*
+  # rather than the code format — see the .md.
+  - condition: template
+    value_template: "{{ is_dynalogic_mail and (is_parcel_mail or dynalogic_codes | count > 0) }}"
+
+actions:
+  - repeat:
+      for_each: "{{ dynalogic_codes }}"
+      sequence:
+        - action: dynalogic.track_parcel
+          data:
+            tracking_code: "{{ repeat.item }}"
+  - if:
+      - condition: template
+        value_template: "{{ dynalogic_codes | count > 0 }}"
+    then:
+      - action: notify.mobile_app_your_phone
+        data:
+          title: "📦 Dynalogic parcel picked up from mail"
+          message: >-
+            {{ dynalogic_codes | join(', ') }} (mail from {{ sender }})
+    else:
+      # ---- Optional AI fallback — delete this block if you have no ai_task entity ----
+      - action: ai_task.generate_data
+        data:
+          task_name: dynalogic-tracking-code-extraction
+          entity_id: ai_task.your_ai_task_entity
+          instructions: >-
+            Below is an e-mail. Determine whether it contains a Dynalogic
+            parcel order number. Dynalogic tracks parcels by the order
+            number printed in the mail — 4-30 letters and digits, with no
+            fixed prefix or length. It also delivers for MediaMarkt,
+            Samsung, Nespresso, Menken, Dynasure and Dynahealth, so the
+            mail may carry one of those brands and still be Dynalogic; the
+            tracking link points at mydynalogic.eu, dynagroup.nl or one of
+            those brand tracking hosts. Only return the number the tracking
+            page asks for, never an invoice or customer number. If the mail
+            is from a different carrier, answer 'other'. When in doubt:
+            'none'.
+
+            Sender: {{ sender }}
+            Subject: {{ subject }}
+            Body:
+            {{ body[:6000] }}
+          structure:
+            carrier:
+              description: Whether a Dynalogic order number was found
+              required: true
+              selector:
+                select:
+                  options: ["dynalogic", "other", "none"]
+            tracking_code:
+              description: The order number, or empty if none
+              required: false
+              selector:
+                text:
+        response_variable: ai_result
+      - choose:
+          - conditions: "{{ ai_result.data.carrier == 'dynalogic' and (ai_result.data.tracking_code | default('') | trim) != '' }}"
+            sequence:
+              - action: dynalogic.track_parcel
+                data:
+                  tracking_code: "{{ ai_result.data.tracking_code | trim }}"
+              - action: notify.mobile_app_your_phone
+                data:
+                  title: "📦 Dynalogic parcel picked up from mail (AI)"
+                  message: "{{ ai_result.data.tracking_code | trim }} (mail from {{ sender }})"
+          - conditions: "{{ ai_result.data.carrier == 'other' and (ai_result.data.tracking_code | default('') | trim) != '' }}"
+            sequence:
+              - action: notify.mobile_app_your_phone
+                data:
+                  title: "📦 Tracking number found – not a Dynalogic parcel"
+                  message: "{{ ai_result.data.tracking_code | trim }} (mail from {{ sender }}, subject: {{ subject }})"

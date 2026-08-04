@@ -1,0 +1,177 @@
+# Working in this repository
+
+Home Assistant custom integration for **Dynalogic** parcel tracking.
+Distributed via HACS; not part of HA core. One carrier in the
+[ha-parcel-integrations](https://github.com/ha-parcel-integrations) suite,
+**generated from ha-carrier-template** — everything outside *Carrier-specific
+notes* is suite-wide; when in doubt check the template or a sibling repo.
+No DTO layer.
+
+## Shared conventions — fetch when relevant
+
+Suite-wide rules live in
+[`.github/CONVENTIONS.md`](https://github.com/ha-parcel-integrations/.github/blob/main/CONVENTIONS.md)
+and are **not** repeated here. Don't fetch it every session — fetch it **before**
+you act in one of these areas:
+
+| Before you … | Fetch `CONVENTIONS.md` § |
+|---|---|
+| touch entities, sensors, config/options flow, coordinator, diagnostics, translations | *Home Assistant developer docs* (its table points on to the canonical HA page — don't rely on memory) |
+| add/rename a parcel field, a `ParcelStatus`, or a bus event; change the sort/first-refresh; touch unmapped-status logging | *Parcel contract* — exact key set, units, sort, events + suppression; `test_parcels.py::test_normalize_publishes_exactly_the_canonical_keys` guards the key set |
+| ship anything while below 1.0.0 (unconfirmed data) | *Pre-1.0 releases* — one-shot WARNINGs for every guessed shape/code |
+| consider "fixing" a lint/pattern the skill flags (poll interval, inline client, sync requests) | *Deliberate skill divergences* — likely intentional, don't re-flag |
+| commit, bump, tag, release, or write release notes; add a feature without a test | *Workflow / Commits / Versioning / Testing* |
+
+**Suite-wide tripwires, kept inline on purpose:**
+- **First refresh in `__init__.py`, before `async_forward_entry_setups`** — from
+  a forwarded platform HA can't catch `ConfigEntryNotReady` and half-sets-up the
+  entry. Runtime-only; tests don't catch a regression.
+- **Setup stale-entity sweep is scoped to `domain == "sensor"` and skips
+  `non_parcel_unique_ids`** — else it deletes the refresh button / the
+  summary+diagnostic sensors. Add a new non-parcel sensor's unique_id to the set.
+- **Per-parcel sensors are removed by the summary sensor** via
+  `entity_registry.async_remove` (self-removal races and leaves ghosts).
+
+## Carrier-specific notes
+
+**API mechanics live in `carrier-research/api/dynalogic/` (private research
+repo)** — the keyless middleware, the two `transportorder` routes, what the
+postcode actually does, the AES-token route we do not use, the status key
+domains and the payload reconstruction. Do not duplicate them here.
+
+### The thing to know before changing anything
+
+**No populated response has ever been observed.** The field names come from the
+vendor's web client, its OpenAPI document declares no success schema for the
+tracking routes, and the app teardown proved the real body is *bigger* than the
+reconstruction — it carries a driver, stop coordinates and a delayed live
+position that no recovered field accounts for. So:
+
+- **Do not extend `normalize_parcel` by guessing a field name.** Six canonical
+  keys are `None` on purpose and the docstring says why for each. `sender`,
+  `receiver`, `planned_from`, `planned_to`, `pickup_point`, `url`.
+- **Every assumption warns once** through `parcels._warn_once`: an unknown
+  scenario, an unknown result code, an out-of-range step, a timestamp that is
+  not `YYYYMMDDHHmmss`, an activity with no recognised description, an
+  unexpected top-level key, and a `full` response without `OrderData`. That set
+  *is* the pre-1.0 obligation for this carrier — do not quiet one without
+  replacing it with a real answer.
+- `check_response_shape` runs in the **coordinator**, on real responses only.
+  The 404 placeholder is ours and has no shape to complain about.
+
+### Status is three fields, not one
+
+`Scenario` (job type, 13 closed values) × `ActiveStep` (1–4) ×
+`TransportResultCode` (16 values, only `0` understood = complete). The mapping
+leans on the step and treats a non-zero code as "not finished". Decisions worth
+keeping:
+
+- **`DEL_NB` (neighbour) maps to plain `delivered`**, like DHL-NL's
+  `DELIVERED_AT_NEIGHBOURS`. The canonical vocabulary has one delivered state;
+  the distinction survives on `raw_status` and in `raw`.
+- **`*_FAIL` outranks the step** → `problem`. **`RS_DEF` is `returning`** even
+  once complete: there is no canonical "returned".
+- **`raw_status` is `"DEL_DEF/3/27"`**, not prose — Dynalogic ships no status
+  text at all, its clients render an icon per step. Inventing a label would be
+  inventing carrier data.
+- Swap / correction / repair jobs (`SW_*`, `COR_*`, and the `machinereparatie`
+  brand) currently become parcels like any other. Whether they should be
+  filtered out is an open scope question, not a mapping detail — the first real
+  orders force it.
+
+### Postcode = a second factor, not a lookup key
+
+- **`full` (code + postcode) is the only route polled.** The postcode-free
+  `partial` route returns no `OrderData`, and `OrderData.Activities` is the only
+  source of history and timestamps. A status-only degraded mode would mean
+  specifying a payload nobody has seen — the exact thing being avoided here.
+- **The hub asks the postcode once** and each parcel stores its own
+  (`{tracking_code, postal_code}`), so a delivery to another address works
+  without a second entry. `single_config_entry` stays: the postcode is per
+  parcel, so a second hub would buy nothing.
+- **Adding a parcel in the options flow costs one request**, on purpose: a wrong
+  postcode is otherwise invisible until the parcel never moves. The
+  `track_parcel` action deliberately does *not* — an automation reacting to a
+  mail must not lose a code the carrier has not registered yet.
+- **`partial` is not implemented.** It would separate "unknown order number"
+  from "wrong postcode" in the config flow, but that truth table is read off
+  route semantics and no real order has exercised it. `api.py` carries the note
+  and `const.TRACKING_API_PARTIAL_URL` is ready.
+- **Never implement `full/ordernumber/{token}`** — a server-side AES decrypt.
+  That is how e-mailed links authorize themselves; it cannot be constructed and
+  there is no key to ship.
+
+### Other integration decisions
+
+- **Timestamps are `YYYYMMDDHHmmss` with no offset, read as Europe/Amsterdam.**
+  An assumption; the first real parcel must be checked against the vendor's own
+  app. `_CARRIER_TZ` is built once at import — never per timestamp, and never in
+  the event loop.
+- **`delivered_at` is the newest activity's timestamp**, because no
+  delivered-at field exists. Inferred.
+- **One integration covers eight brands.** The tracking routes take no brand
+  parameter. Do not build brand variants and do not derive the host from a
+  brand — target `api.dynagroup.nl` directly.
+- **Diagnostics redact whole blocks** (`Addressee`, `ContactInformation`), not
+  leaves: the leaves we do not know the names of are exactly the ones a per-leaf
+  list would miss.
+- **Rate limiting is unknown** (a few dozen probes, nothing observed), which is
+  why the interval stays user-visible and the default gentle. If reports of
+  throttling arrive, this is a `--interval fixed` carrier.
+
+## Options and reloads
+
+The options flow is one sectioned form (`data_entry_flow.section`); changes apply
+without a restart. Two models, **do not mix them**:
+- **Account-less carriers** (the default) apply changes live: an update listener
+  retunes `coordinator.update_interval` and calls `async_request_refresh()`, so
+  added/removed parcel sensors appear immediately.
+- **Account-based carriers** call `async_schedule_reload` on submit and register
+  **no** update listener. Combining a listener with a reload-on-update flow is
+  deprecated, an error in HA 2026.12+.
+
+The user-tunable poll interval is a deliberate HACS divergence (see
+CONVENTIONS.md); a carrier that throttles is generated with a fixed cadence and no
+polling option at all.
+
+## Module layout
+
+| File | Carrier-specific? |
+|---|---|
+| `api.py` (HTTP client, error types) | **yes** |
+| `const.py` (domain, URLs, `ParcelStatus`, option keys) | partly (URLs) |
+| `parcels.py` (status map, `normalize_parcel`, history, sort, filters — pure, no I/O) | partly (`_STATUS_MAP`, `normalize_parcel`) |
+| `coordinator.py` (fetch, cache, event firing) | mostly not |
+| `config_flow.py` | partly (code validation) |
+| `sensor.py` / `button.py` / `calendar.py` / `device_trigger.py` | no |
+| `diagnostics.py` | partly (`TO_REDACT`) |
+| `services.py` (`track_parcel` / `untrack_parcel`, account-less only) | no |
+
+`parcels.py` is deliberately free of I/O and HA objects so the per-carrier part
+stays unit-testable without Home Assistant. Config: `ConfigEntry.runtime_data`
+(typed, no `hass.data`), `PARALLEL_UPDATES = 0`, coordinator takes
+`config_entry=entry`. `aiohttp.ClientError` is caught **per parcel** in the gather
+loop (one bad parcel doesn't fail the poll) but **not** around the whole update
+(the coordinator wraps that). Entities: `has_entity_name` + `translation_key`,
+`icons.json`, translated units, `_attr_attribution`, `_unrecorded_attributes` on
+anything with a parcel list or `raw`. Over-redact diagnostics — they get pasted
+into public issues.
+
+## Tests on Windows
+
+`tests/conftest.py` carries two Windows-only shims (no-ops elsewhere):
+`disable_socket` is neutralised (Windows event loops need AF_INET socketpairs;
+the 127.0.0.1 allowlist stays) and HA's `AsyncResolver` is swapped for
+`ThreadedResolver` (aiodns refuses the Proactor loop). Do not remove them
+"because CI passes" — CI is Linux, development is Windows.
+
+## Running tests
+
+```
+python -m pytest tests/ --cov=custom_components.dynalogic
+```
+
+Coverage must stay **above 95%** (silver `test-coverage` rule). Run before
+committing. A code change updates the README + this file + `docs/` in the same
+commit; the API reference lives in this carrier's directory under the private
+`carrier-research/api/`, never in this repo.
