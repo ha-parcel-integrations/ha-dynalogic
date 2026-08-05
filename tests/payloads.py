@@ -10,7 +10,11 @@ What the capture settles, and what it does not:
 * **Settled** — the top-level key set (ten keys the reconstruction never saw),
   `ExecutedDateTime` being naive ISO 8601 and *not* `YYYYMMDDHHmmss`, the
   activity description living under `Description`, `OrderData.CustomerName`
-  being the shipper, and `DEL_DEF`/4/0 meaning delivered.
+  being the shipper, and `DEL_DEF`/4/0 meaning delivered. A day later
+  (2026-08-06) the *same* order arrived again as the raw sensor attributes
+  rather than as diagnostics — diagnostics redact, the sensor's `raw` attribute
+  does not — which settled the two blocks the first copy had blanked whole:
+  `OrderData.Addressee` and `ContactInformation`.
 * **Not settled** — everything an order carries while it is still *moving*. The
   captured order was already delivered, so `TransportProgress` was `null`, there
   was no delivery-window field, and no driver position. `active_sample` below is
@@ -26,18 +30,68 @@ ACTIVE_CODE = "1234567890"
 DELIVERED_CODE = "9876543210"
 POSTCODE = "1012AB"
 
-# Substituted for the captured order's real identifiers. The relationship
-# between them is real and worth preserving: the physical parcel barcode is the
-# shipper's Dynalogic customer id followed by the shipper's own order number,
-# and neither equals the `TrackAndTraceNumber` the user types in.
+# Substituted for the captured order's real identifiers. The physical parcel
+# barcode opens with the shipper's Dynalogic customer id followed by (most of)
+# the shipper's own order number; on the one order seen unredacted it is also
+# byte-for-byte the `TrackAndTraceNumber` the user types in. They are kept
+# *distinct* here on purpose — the integration reads the order number from
+# `TrackAndTraceNumber`, and a fixture where both spellings hold the same value
+# could not tell a correct read from a lucky one.
 _CUSTOMER_ID = 18987                       # bol.'s account with Dynalogic
 _CUSTOMER_ORDER_NUMBER = "00000000001"
 _BARCODE = f"{_CUSTOMER_ID}{_CUSTOMER_ORDER_NUMBER}"
 
-# The addressee block is personal data, so every copy anyone can look at has it
-# redacted whole — which means its *shape* is unknown. `_receiver` handles a
-# scalar and an object; the fixtures exercise both.
+# The addressee block is personal data, so the diagnostics capture had it
+# redacted whole. Its shape came from a user's sensor state on 2026-08-06: an
+# object, with the recipient's name on `Name1`. Values are substituted, keys are
+# the real ones. `_receiver` still handles a scalar too and the fixtures exercise
+# both — one shipper's fill-in is not the whole vocabulary.
 ADDRESSEE = "A. Bewoner"
+ADDRESSEE_BLOCK = {
+    "Company": ADDRESSEE,
+    "Name1": ADDRESSEE,
+    "Name2": "",
+    "Name3": "",
+    "Name4": "",
+    "Street": "Teststraat",
+    "HouseNumber": "1",
+    "HouseNumberAddition": "",
+    "PostalCode": "1012 AB",
+    "City": "Amsterdam",
+    "CountryName": "Nederland",
+    "EmailAddress": "a.bewoner@example.invalid",
+    "Phone1": "0600000000",
+    "Phone2": "",
+    "Phone3": "",
+    "Phone4": "",
+}
+
+# The carrier's *own* contact desk — not the recipient's details. Shape observed
+# alongside the addressee block; diagnostics still redact it whole, because the
+# cost of that is nil and it is per-order.
+CONTACT_INFORMATION = {
+    "WhatsAppPhoneNumber": "31600000000",
+    "ContactEmailAddress": "afspraak@dynalogic.eu",
+    "ComplaintEmailAddress": None,
+    "ContactPageUrl": None,
+    "ContactEmailOpening": None,
+    "OpeningHours": [
+        {
+            "Weekday": "Monday",
+            "IsOpened": True,
+            "OpenedFrom": "08:30:00",
+            "OpenedTo": "20:30:00",
+        },
+        {
+            "Weekday": "Sunday",
+            "IsOpened": False,
+            "OpenedFrom": None,
+            "OpenedTo": None,
+        },
+    ],
+    "PhoneNumbers": [],
+    "WhatsappNumbers": [],
+}
 
 
 def activity(executed: str, description: str) -> dict:
@@ -72,7 +126,7 @@ def delivered_sample(code: str = DELIVERED_CODE) -> dict:
             "DriverId": 10001,
             "DriverName": "R. Chauffeur",
             "DriverBadgeNumber": None,
-            "Addressee": ADDRESSEE,
+            "Addressee": dict(ADDRESSEE_BLOCK),
             "Activities": [
                 activity("2026-08-04T13:34:10.507", "Opdracht succesvol uitgevoerd"),
                 activity(
@@ -86,7 +140,7 @@ def delivered_sample(code: str = DELIVERED_CODE) -> dict:
                 activity("2026-08-04T04:55:54.33", "Uw zending is door ons ontvangen"),
                 activity(
                     "2026-08-03T23:33:36.097",
-                    "Afspraak gepland voor vandaag tussen 8:00u en 22:00u",
+                    "Afspraak gepland voor dinsdag 4 augustus tussen 8:00u en 22:00u",
                 ),
                 activity(
                     "2026-08-03T23:33:36.043",
@@ -115,7 +169,7 @@ def delivered_sample(code: str = DELIVERED_CODE) -> dict:
             ],
         },
         "OrderGroup": None,
-        "ContactInformation": "0800-0000",
+        "ContactInformation": dict(CONTACT_INFORMATION),
         "TrackAndTraceNumber": code,
         "OnlineAppointmentEnabled": 0,
         "Scenario": "DEL_DEF",
@@ -124,7 +178,9 @@ def delivered_sample(code: str = DELIVERED_CODE) -> dict:
         "ActiveStep": 4,
         "DetailCaption": "Succesvol bezorgd",
         "DetailTextLine1": "",
-        "DetailTextLine2": "We hebben de zending vandaag succesvol bezorgd.",
+        "DetailTextLine2": (
+            "We hebben de zending op dinsdag 4 augustus succesvol bezorgd."
+        ),
         "ProgressData": [
             {"StepNumber": step, "Status": 1, "Overlay": 0} for step in range(1, 5)
         ],
@@ -180,20 +236,17 @@ def failed_sample(code: str = ACTIVE_CODE) -> dict:
     return sample
 
 
-def addressee_object_sample(code: str = DELIVERED_CODE) -> dict:
-    """The delivered capture with `Addressee` as an object rather than a string.
+def addressee_scalar_sample(code: str = DELIVERED_CODE) -> dict:
+    """The delivered capture with `Addressee` as a bare string.
 
-    The shape is genuinely unknown — the block is redacted everywhere — so both
-    readings are exercised. The keys here are the ones the vendor's web client
-    was seen to touch, plus the name field `_receiver` looks for.
+    The observed block is an object (see `ADDRESSEE_BLOCK`, which is what
+    `delivered_sample` carries), but the field *name* reads like a scalar and
+    one shipper's fill-in is not the whole vocabulary, so `_receiver` keeps
+    handling both and this exercises the other branch.
     """
     sample = delivered_sample(code)
     sample["OrderData"] = dict(sample["OrderData"])
-    sample["OrderData"]["Addressee"] = {
-        "Name": ADDRESSEE,
-        "PostalCode": POSTCODE,
-        "CountryName": "Nederland",
-    }
+    sample["OrderData"]["Addressee"] = ADDRESSEE
     return sample
 
 

@@ -133,8 +133,8 @@ KEY_ACTIVE_STEP = "ActiveStep"                # observed
 KEY_ORDER_DATA = "OrderData"                  # observed
 KEY_ACTIVITIES = "Activities"                 # observed
 KEY_EXECUTED = "ExecutedDateTime"             # observed
-KEY_ADDRESSEE = "Addressee"                   # observed (shape redacted, see below)
-KEY_CONTACT = "ContactInformation"            # observed (shape redacted)
+KEY_ADDRESSEE = "Addressee"                   # observed — object, shape known
+KEY_CONTACT = "ContactInformation"            # observed — object, shape known
 KEY_CUSTOMER_NAME = "CustomerName"            # observed — the shipper, e.g. "bol."
 KEY_ORDER_STATUS = "OrderStatusForAddressee"  # observed — "COMPLETED"
 
@@ -185,11 +185,14 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
 # actual delivery at about 13:30. Read as UTC it would have been 15:34, so the
 # two readings are two hours apart and the answer is not close.
 #
-# One thing in that payload argues the other way and should be ignored: the
-# "Afspraak gepland voor vandaag" activity is stamped 23:33 on the day *before*
-# the window it announces. That is the carrier's message template being sloppy
-# about "vandaag" on a late-night batch import, not evidence about the zone.
-# Recorded here so nobody re-opens the question on seeing it.
+# Nothing in that payload argues the other way. 0.9.x recorded one thing that
+# seemed to — an "Afspraak gepland voor vandaag" activity stamped 23:33 on the
+# day *before* the window it announces — and put it down to a sloppy message
+# template. The unredacted payload (2026-08-06) shows the activity actually says
+# "Afspraak gepland voor **dinsdag 4 augustus**", stamped the Monday night: it
+# names the day and is perfectly consistent. The "vandaag" was introduced by the
+# date substitution in the redacted copy. Recorded here so nobody re-opens the
+# question on seeing either version.
 CARRIER_TIMEZONE = "Europe/Amsterdam"
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 

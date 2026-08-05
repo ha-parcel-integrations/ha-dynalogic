@@ -38,7 +38,7 @@ Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) 
 
 - Track any number of Dynalogic parcels by order number + postcode — no account needed
 - Covers every brand on the same network (MediaMarkt, Samsung, Nespresso, Menken, Dynasure, Dynahealth)
-- Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the sender, the carrier's own status fields and the delivery history
+- Per-parcel sensor with the canonical status (`registered` / `in_transit` / `out_for_delivery` / `delivered` / …), the sender and recipient, the carrier's own status fields and the delivery history
 - Summary sensors: incoming parcels, next delivery, recently delivered parcels
 - Read-only **Deliveries** calendar
 - `dynalogic.track_parcel` / `dynalogic.untrack_parcel` services, so a dashboard button can add a parcel

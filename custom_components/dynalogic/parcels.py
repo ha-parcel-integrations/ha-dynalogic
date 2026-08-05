@@ -471,21 +471,44 @@ def _sender(raw: dict) -> str | None:
 
 
 # Candidate keys for the addressee's name, used only if ``Addressee`` turns out
-# to be an object. Same approach as `_ACTIVITY_TEXT_KEYS` and for the same
-# reason: the block is personal data, so the one capture we have has it redacted
-# whole and its shape is genuinely unknown.
-_ADDRESSEE_NAME_KEYS = ("Name", "FullName", "Addressee", "ContactName", "CompanyName")
+# to be an object. The first two are **observed** (2026-08-06); the rest are the
+# reconstruction's guesses, kept as a fallback because one order is one shipper's
+# way of filling the block in, not proof of what every shipper sends.
+#
+# ``Name1`` first, then ``Company``: the block carries four ``NameN`` address
+# lines and a separate ``Company``, and on a consumer delivery the shipper put
+# the recipient in both. On a business delivery ``Company`` would be the firm and
+# ``Name1`` the person to hand it to — which is the one we want.
+_ADDRESSEE_NAME_KEYS = (
+    "Name1",
+    "Company",
+    "Name",
+    "FullName",
+    "Addressee",
+    "ContactName",
+    "CompanyName",
+)
 
 
 def _receiver(raw: dict) -> str | None:
     """Return the addressee's name from ``OrderData.Addressee``.
 
-    ``Addressee`` is confirmed to exist and confirmed to be personal data, which
-    is exactly why its shape is not: every copy we can look at has the whole
-    block redacted. The reconstruction from the web client suggested an object
-    with ``PostalCode`` / ``CountryName``; the field name reads like a scalar.
-    Both are handled, and an object whose name field we cannot find reports its
-    keys once rather than publishing a silent ``None`` forever.
+    **The block's shape is observed** (2026-08-06, from a user's sensor state —
+    the diagnostics capture of the day before had it redacted whole, which is
+    why 0.9.x could only guess). It is an object, and its name lives under
+    ``Name1``:
+
+        Company, Name1, Name2, Name3, Name4, Street, HouseNumber,
+        HouseNumberAddition, PostalCode, City, CountryName, EmailAddress,
+        Phone1, Phone2, Phone3, Phone4
+
+    None of those was in the guessed key list, so every parcel published
+    ``receiver: None`` until now — the ``addressee_shape`` warning is what
+    surfaced it, working exactly as intended.
+
+    A scalar is still handled: the field name reads like one, and one shipper's
+    fill-in is not the whole vocabulary. An object whose name field we cannot
+    find still reports its keys once rather than publishing a silent ``None``.
     """
     value = _order_data(raw).get(KEY_ADDRESSEE)
     if isinstance(value, str):
@@ -694,10 +717,13 @@ def normalize_parcel(raw: dict, *, include_history: bool = False) -> dict:
     last-mile courier and exposes neither.
 
     ``barcode`` stays the **order number** (``TrackAndTraceNumber``), not
-    ``OrderData.OrderLines[].Barcode``. The real capture proved the two differ —
-    the order lines carry the physical parcel barcode — but the order number is
-    what the user entered, what the sensor's unique id is built from, and what
-    is present even on a 404 placeholder.
+    ``OrderData.OrderLines[].Barcode``. On the one order seen unredacted the two
+    are the *same* value — 0.9.x claimed the capture proved they differ, which
+    was an artifact of how that capture was redacted, not a finding. They are
+    still read from different places on purpose: ``TrackAndTraceNumber`` is what
+    the user entered, what the sensor's unique id is built from, and the only one
+    of the two present on a 404 placeholder. An order with more than one line
+    would have several ``Barcode`` values and still one order number.
     """
     tracking_code = raw.get(KEY_TRACKING_NUMBER)
     scenario = raw.get(KEY_SCENARIO)

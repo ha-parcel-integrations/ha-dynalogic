@@ -42,7 +42,10 @@ domains and the payload reconstruction. Do not duplicate them here.
 ### The thing to know before changing anything
 
 **Exactly one populated response has ever been observed** — a *delivered* order,
-captured 2026-08-05 from a user's diagnostics, redacted into
+captured 2026-08-05 from a user's diagnostics and **completed 2026-08-06 from
+the same order's raw sensor attributes** (diagnostics redact, the sensor's `raw`
+attribute does not, so the second copy carried the `Addressee` and
+`ContactInformation` blocks the first had blanked whole). Redacted into
 `carrier-research/api/dynalogic/response-full-delivered.json` and into
 `tests/payloads.py`. It corrected two things 0.9.0 asserted:
 
@@ -67,13 +70,18 @@ An **in-transit capture** is the one thing left worth asking for. So:
   `planned_from`, `planned_to`, `pickup_point`, `url`. (`sender` and `receiver`
   were the other two until the capture named `OrderData.CustomerName` and
   confirmed `OrderData.Addressee`.)
-- **`Addressee`'s shape is still unknown** — it is personal data, so every copy
-  anyone can look at has it redacted whole. `_receiver` handles a scalar and an
-  object, and reports the keys of an object it cannot find a name in.
-- **`barcode` is the order number, not `OrderLines[].Barcode`.** The capture
-  proved they differ (the latter is `CustomerId` + `CustomerOrderNumber`, the
-  physical label). The order number is what the user typed and what the sensor's
-  unique id is built from.
+- **`Addressee` is an object and the name is on `Name1`** (observed 2026-08-06;
+  `Company` is the fallback, since on a business delivery that is the firm and
+  `Name1` the person). 0.9.x looked for `Name`/`FullName`/`ContactName` — none
+  of which exist — so it published `receiver: None` on *every real parcel*; its
+  `addressee_shape` warning is what surfaced that. `_receiver` still handles a
+  scalar and still reports the keys of an object it cannot find a name in.
+- **`barcode` is the order number**, read from `TrackAndTraceNumber`. 0.9.x said
+  the capture proved it differs from `OrderLines[].Barcode`; that was an artifact
+  of the redaction substituting the two independently — on the wire they are the
+  same value. Keep reading `TrackAndTraceNumber` anyway: it is what the user
+  typed, what the sensor's unique id is built from, the only one of the two on a
+  404 placeholder, and a multi-line order has several barcodes and one number.
 - **Every assumption warns once** through `parcels._warn_once`, keyed so the
   different kinds cannot mask each other. The set *is* the pre-1.0 obligation
   for this carrier — do not quiet one without replacing it with a real answer:
@@ -146,14 +154,16 @@ keeping:
 
 ### Other integration decisions
 
-- **Timestamps carry no offset and are read as Europe/Amsterdam — confirmed.**
-  The captured order's delivery activity is stamped 13:34 and the recipient put
-  the real delivery at about 13:30; UTC would have made it 15:34. Ignore the one
-  thing in that payload that argues otherwise: *"Afspraak gepland voor
-  **vandaag**"* stamped 23:33 the day **before** the window it announces is a
-  sloppy message template on a late-night batch import, not a zone signal.
-  `_CARRIER_TZ` is built once at import — never per timestamp, and never in the
-  event loop.
+- **Timestamps carry no offset and are read as Europe/Amsterdam — confirmed,
+  and nothing contradicts it.** The captured order's delivery activity is stamped
+  13:34 and the recipient put the real delivery at about 13:30; UTC would have
+  made it 15:34. 0.9.x recorded one apparent counter-example — *"Afspraak gepland
+  voor **vandaag**"* stamped 23:33 the day *before* the window it announces —
+  and explained it away as a sloppy template. The unredacted payload shows the
+  activity says *"voor **dinsdag 4 augustus**"*: it names the day and is exactly
+  right. The "vandaag" was introduced by date-substituting free text while
+  redacting. `_CARRIER_TZ` is built once at import — never per timestamp, and
+  never in the event loop.
 - **`delivered_at` is the newest activity's timestamp**, because no
   delivered-at field exists. Inferred, and the capture did not contradict it.
 - **One integration covers eight brands.** The tracking routes take no brand

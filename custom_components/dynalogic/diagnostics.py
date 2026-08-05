@@ -22,8 +22,9 @@ from . import DynalogicConfigEntry
 # `async_redact_data` matches keys **case-sensitively and at every depth**, so
 # the carrier's PascalCase spelling has to be listed next to our own snake_case
 # one. The first real capture proved that matters: `barcode` was redacted while
-# `OrderData.OrderLines[].Barcode` — the physical parcel barcode, and a
-# different value from the order number — went out in the clear.
+# `OrderData.OrderLines[].Barcode` — the physical parcel barcode, which on the
+# one order seen unredacted is the same value as the order number — went out in
+# the clear.
 TO_REDACT = {
     # canonical fields we publish ourselves
     "tracking_code",
@@ -60,14 +61,28 @@ TO_REDACT = {
     "Longitude",
     "Position",
     "Coordinates",
-    # generic leaves, whatever block they turn up in
+    # generic leaves, whatever block they turn up in. The `Addressee` block is
+    # already redacted whole; these are its **observed** leaf names (2026-08-06)
+    # listed separately so the same leaf is caught in a block we have not seen
+    # yet — a proof of delivery, a neighbour's details, a second address.
     "Name",
+    "Name1",
+    "Name2",
+    "Name3",
+    "Name4",
+    "Company",
     "Street",
     "HouseNumber",
+    "HouseNumberAddition",
     "City",
     "PostalCode",
     "Email",
+    "EmailAddress",
     "PhoneNumber",
+    "Phone1",
+    "Phone2",
+    "Phone3",
+    "Phone4",
     "Signature",
 }
 

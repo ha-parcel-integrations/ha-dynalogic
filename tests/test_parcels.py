@@ -45,7 +45,7 @@ from .payloads import (
     DELIVERED_CODE,
     active_sample,
     activity,
-    addressee_object_sample,
+    addressee_scalar_sample,
     delivered_sample,
     failed_sample,
     neighbour_sample,
@@ -282,10 +282,10 @@ def test_check_response_shape_reports_the_structure_of_a_known_payload(caplog):
 
 
 def test_check_response_shape_never_logs_a_value(caplog):
-    raw = addressee_object_sample()
-    raw["OrderData"]["Addressee"]["Name"] = "Jane Doe"
+    raw = delivered_sample()
+    raw["OrderData"]["Addressee"]["Name1"] = "Jane Doe"
     check_response_shape(raw)
-    assert "OrderData.Addressee.Name: str" in caplog.text
+    assert "OrderData.Addressee.Name1: str" in caplog.text
     assert "Jane Doe" not in caplog.text
     assert "Opdracht succesvol uitgevoerd" not in caplog.text
     # Nor the identifiers, which are not personal but do resolve to one parcel.
@@ -472,20 +472,39 @@ def test_normalize_delivered_parcel():
 
 
 def test_normalize_reads_the_shipper_and_the_addressee():
-    """`CustomerName` is the shipper — Dynalogic's customer, not the recipient."""
+    """`CustomerName` is the shipper — Dynalogic's customer, not the recipient.
+
+    The addressee is the observed object, whose name is on `Name1`. 0.9.x looked
+    for `Name`/`FullName`/`ContactName` and so published `receiver: None` on
+    every real parcel.
+    """
     parcel = normalize_parcel(delivered_sample())
     assert parcel["sender"] == "bol."
     assert parcel["receiver"] == ADDRESSEE
 
 
-def test_normalize_reads_an_addressee_object_too():
-    """The block's shape is unknown because it is redacted everywhere."""
-    assert normalize_parcel(addressee_object_sample())["receiver"] == ADDRESSEE
+def test_normalize_prefers_the_addressee_name_over_the_company():
+    """On a business delivery `Company` is the firm and `Name1` the person."""
+    raw = delivered_sample()
+    raw["OrderData"]["Addressee"]["Company"] = "Bedrijf B.V."
+    assert normalize_parcel(raw)["receiver"] == ADDRESSEE
+
+
+def test_normalize_falls_back_to_the_company_when_there_is_no_name():
+    raw = delivered_sample()
+    raw["OrderData"]["Addressee"]["Name1"] = ""
+    raw["OrderData"]["Addressee"]["Company"] = "Bedrijf B.V."
+    assert normalize_parcel(raw)["receiver"] == "Bedrijf B.V."
+
+
+def test_normalize_reads_a_scalar_addressee_too():
+    """The field name reads like a scalar; both readings stay supported."""
+    assert normalize_parcel(addressee_scalar_sample())["receiver"] == ADDRESSEE
 
 
 def test_normalize_reports_an_addressee_it_cannot_read(caplog):
     """Better a reported gap than a silent `None` forever."""
-    raw = addressee_object_sample()
+    raw = delivered_sample()
     raw["OrderData"]["Addressee"] = {"Straat": "Kerkstraat 1"}
     parcel = normalize_parcel(raw)
     assert parcel["receiver"] is None
