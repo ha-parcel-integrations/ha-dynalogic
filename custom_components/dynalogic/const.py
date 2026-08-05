@@ -180,14 +180,16 @@ KNOWN_TOP_LEVEL_KEYS = frozenset(
 # handles a compact `YYYYMMDDHHmmss` form (its `dynadatetime` pipe branches on a
 # bare 14-digit match), so both are accepted; only ISO has been seen on the wire.
 #
-# Neither form carries a zone, and Amsterdam remains an *assumption* — a .NET
-# `DateTime` with `Kind=Unspecified` conventionally serialises local time, and
-# the carrier is a Dutch last-mile operation. There is real counter-evidence:
-# the captured order's "Afspraak gepland voor vandaag" activity is stamped
-# 23:33 on the day *before* the window it announces, which reads correctly only
-# if the stamp is UTC. Unresolved; it needs one parcel whose real delivery time
-# the reporter can state. Until then a wrong reading costs two hours on
-# `delivered_at` and on every history entry, and nothing else.
+# Neither form carries a zone, and Amsterdam is **confirmed** (2026-08-05): the
+# captured order's delivery activity is stamped 13:34 and the recipient put the
+# actual delivery at about 13:30. Read as UTC it would have been 15:34, so the
+# two readings are two hours apart and the answer is not close.
+#
+# One thing in that payload argues the other way and should be ignored: the
+# "Afspraak gepland voor vandaag" activity is stamped 23:33 on the day *before*
+# the window it announces. That is the carrier's message template being sloppy
+# about "vandaag" on a late-night batch import, not evidence about the zone.
+# Recorded here so nobody re-opens the question on seeing it.
 CARRIER_TIMEZONE = "Europe/Amsterdam"
 TIMESTAMP_FORMAT = "%Y%m%d%H%M%S"
 

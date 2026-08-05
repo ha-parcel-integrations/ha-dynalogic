@@ -194,13 +194,13 @@ def test_to_iso_timestamp_reads_amsterdam_local_time():
 
 
 def test_to_iso_timestamp_applies_winter_offset():
-    """The same assumption in January, to prove it is a zone and not +02:00."""
+    """The same reading in January, to prove it is a zone and not a fixed +02:00."""
     assert to_iso_timestamp("20260105080000") == "2026-01-05T08:00:00+01:00"
     assert to_iso_timestamp("2026-01-05T08:00:00") == "2026-01-05T08:00:00+01:00"
 
 
 def test_to_iso_timestamp_trusts_an_explicit_offset():
-    """Only a zone-less stamp gets the Amsterdam assumption applied to it."""
+    """Only a zone-less stamp gets the Amsterdam reading applied to it."""
     assert to_iso_timestamp("2026-08-04T13:34:10Z") == "2026-08-04T13:34:10+00:00"
     assert (
         to_iso_timestamp("2026-08-04T13:34:10+05:00") == "2026-08-04T13:34:10+05:00"

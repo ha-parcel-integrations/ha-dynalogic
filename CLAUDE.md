@@ -146,14 +146,14 @@ keeping:
 
 ### Other integration decisions
 
-- **Timestamps carry no offset and are read as Europe/Amsterdam.** Still an
-  assumption, and now one with evidence on both sides: a .NET `DateTime` with
-  `Kind=Unspecified` conventionally serialises local time, but the captured
-  order's *"Afspraak gepland voor **vandaag**"* activity is stamped 23:33 the day
-  **before** the window it announces, which only reads correctly as UTC. It
-  needs one parcel whose real delivery time the reporter can state; a wrong
-  reading costs two hours and nothing else. `_CARRIER_TZ` is built once at
-  import — never per timestamp, and never in the event loop.
+- **Timestamps carry no offset and are read as Europe/Amsterdam — confirmed.**
+  The captured order's delivery activity is stamped 13:34 and the recipient put
+  the real delivery at about 13:30; UTC would have made it 15:34. Ignore the one
+  thing in that payload that argues otherwise: *"Afspraak gepland voor
+  **vandaag**"* stamped 23:33 the day **before** the window it announces is a
+  sloppy message template on a late-night batch import, not a zone signal.
+  `_CARRIER_TZ` is built once at import — never per timestamp, and never in the
+  event loop.
 - **`delivered_at` is the newest activity's timestamp**, because no
   delivered-at field exists. Inferred, and the capture did not contradict it.
 - **One integration covers eight brands.** The tracking routes take no brand

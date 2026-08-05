@@ -329,10 +329,10 @@ def to_iso_timestamp(value: Any) -> str | None:
       no ``history``, no ``delivered_at``. Kept because the web client plainly
       handles it, so some route or some order kind presumably emits it.
 
-    Neither form carries a zone, so both are read as Europe/Amsterdam — an
-    assumption, and one with live counter-evidence; see ``CARRIER_TIMEZONE``.
-    A stamp that *does* carry an offset is trusted as-is. Anything else warns
-    once and is dropped rather than guessed at.
+    Neither form carries a zone, so both are read as Europe/Amsterdam — checked
+    against a real delivery and confirmed, see ``CARRIER_TIMEZONE``. A stamp
+    that *does* carry an offset is trusted as-is. Anything else warns once and
+    is dropped rather than guessed at.
     """
     if value is None:
         return None
