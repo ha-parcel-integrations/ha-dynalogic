@@ -39,5 +39,3 @@ ENV/
 
 # Claude Code (local)
 .claude/
-
-# Local build notes from the template bootstrap — never committed
