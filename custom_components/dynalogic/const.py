@@ -28,6 +28,21 @@ class ParcelStatus(StrEnum):
 
 PLATFORMS = [Platform.BUTTON, Platform.CALENDAR, Platform.SENSOR]
 
+# Every optional key the parcel contract defines. CAPABILITIES below must be a
+# subset of this — it exists so a typo in CAPABILITIES fails a test instead of
+# silently dropping this carrier off a table on the docs site.
+KNOWN_CAPABILITIES = frozenset(
+    {"weight", "dimensions", "delivery_window", "pickup_point", "url", "history"}
+)
+
+# Which optional contract fields this carrier's API actually populates — feeds
+# the comparison table on the docs site. Keep in lockstep with
+# normalize_parcel() in parcels.py: everything not listed here comes back as a
+# literal None there. The one delivered order captured so far has no delivery
+# window, no pickup-point signal, no constructible tracking URL, and no
+# weight/dimensions — only history is populated.
+CAPABILITIES = frozenset({"history"})
+
 # The two endpoints the integration talks to. Both live on the *app*
 # middleware, not on the website's `/api` mirror: the middleware is versioned,
 # needs no headers at all, and is what the vendor's own app calls. The website

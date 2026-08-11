@@ -69,7 +69,9 @@ An **in-transit capture** is the one thing left worth asking for. So:
   keys are `None` on purpose and the docstring says why for each:
   `planned_from`, `planned_to`, `pickup_point`, `url`. (`sender` and `receiver`
   were the other two until the capture named `OrderData.CustomerName` and
-  confirmed `OrderData.Addressee`.)
+  confirmed `OrderData.Addressee`.) Reflected in `const.py`'s `CAPABILITIES`
+  (feeds the docs site's comparison table) — keep the two in agreement if that
+  ever changes.
 - **`Addressee` is an object and the name is on `Name1`** (observed 2026-08-06;
   `Company` is the fallback, since on a business delivery that is the firm and
   `Name1` the person). 0.9.x looked for `Name`/`FullName`/`ContactName` — none
