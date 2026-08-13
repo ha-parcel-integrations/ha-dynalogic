@@ -63,10 +63,12 @@ def test_valid_tracking_code_is_deliberately_generous():
 
 
 def test_normalize_and_validate_postcode():
+    """NL is 4 digits + 2 letters; BE is the same 4 digits with no letters."""
     assert normalize_postcode(" 1012 ab ") == "1012AB"
-    assert valid_postcode("1012AB")
-    assert not valid_postcode("0123AB")  # no Dutch postcode starts with 0
-    assert not valid_postcode("1012")
+    assert valid_postcode("1012AB")  # NL
+    assert valid_postcode("1012")  # BE
+    assert not valid_postcode("0123AB")  # no NL/BE postcode starts with 0
+    assert not valid_postcode("0123")
     assert not valid_postcode("ABCDEF")
 
 

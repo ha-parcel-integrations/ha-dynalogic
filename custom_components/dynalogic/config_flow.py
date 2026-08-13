@@ -69,12 +69,12 @@ def normalize_postcode(value: str) -> str:
 
 
 def valid_postcode(value: str) -> bool:
-    """Whether ``value`` is a Dutch postcode.
+    """Whether ``value`` is a Dutch or Belgian postcode.
 
-    Dynalogic is a Dutch last-mile carrier and its whole white-label estate is
-    NL; the API itself validates nothing (it only checks the postcode against
-    the order it belongs to), so this is our own guard against a typo becoming
-    a parcel that silently never resolves.
+    Dynalogic delivers in the Netherlands and Belgium; the API itself
+    validates nothing (it only checks the postcode against the order it
+    belongs to), so this is our own guard against a typo becoming a parcel
+    that silently never resolves.
     """
     return bool(_POSTCODE_RE.match(value))
 

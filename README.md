@@ -6,7 +6,7 @@
 
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
 
-A custom Home Assistant integration that tracks your [Dynalogic](https://track.mydynalogic.eu) parcels. Dynalogic is a Dutch last-mile carrier. No account is needed — you enter the order number and the delivery postcode yourself, exactly as you would on their tracking page.
+A custom Home Assistant integration that tracks your [Dynalogic](https://track.mydynalogic.eu) parcels. Dynalogic is a Benelux last-mile carrier, delivering in the Netherlands and Belgium. No account is needed — you enter the order number and the delivery postcode yourself, exactly as you would on their tracking page.
 
 **You may be a Dynalogic customer without knowing it.** The same delivery network — and the same tracking — runs behind a number of consumer brands: MediaMarkt, Samsung, Nespresso (machinereparatie), Menken, Dynasure and Dynahealth. If your tracking link points at one of those sites, this integration tracks that parcel.
 

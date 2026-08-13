@@ -9,7 +9,7 @@
           "postal_code": "Postcode"
         },
         "data_description": {
-          "postal_code": "The postcode parcels are delivered to, e.g. 1012AB."
+          "postal_code": "The postcode parcels are delivered to, e.g. 1012AB (NL) or 1000 (BE)."
         }
       }
     },
@@ -17,7 +17,7 @@
       "already_configured": "Dynalogic is already set up."
     },
     "error": {
-      "invalid_postcode": "That is not a Dutch postcode. Use four digits and two letters, e.g. 1012AB."
+      "invalid_postcode": "That is not a Dutch or Belgian postcode. Use four digits, plus two letters for a Dutch postcode, e.g. 1012AB or 1000."
     }
   },
   "options": {
@@ -71,7 +71,7 @@
     },
     "error": {
       "invalid_tracking_code": "That does not look like a Dynalogic order number.",
-      "invalid_postcode": "That is not a Dutch postcode. Use four digits and two letters, e.g. 1012AB.",
+      "invalid_postcode": "That is not a Dutch or Belgian postcode. Use four digits, plus two letters for a Dutch postcode, e.g. 1012AB or 1000.",
       "already_tracked": "That parcel is already being tracked.",
       "parcel_not_found": "Dynalogic does not know that order number with this postcode. Check both — the postcode must be the one the parcel is being delivered to.",
       "cannot_connect": "Could not reach Dynalogic. Try again in a moment."

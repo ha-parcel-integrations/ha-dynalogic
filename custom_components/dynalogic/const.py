@@ -89,9 +89,10 @@ CONF_PARCELS = "parcels"
 CONF_TRACKING_CODE = "tracking_code"
 CONF_POSTAL_CODE = "postal_code"
 
-# Dutch postcode: four digits, two letters. Stored normalised (no space, upper
-# case) and lower-cased on the wire, which is what the vendor's own client does.
-POSTCODE_RE = r"^[1-9][0-9]{3}[A-Z]{2}$"
+# Dutch postcode: four digits, two letters. Belgian postcode: the same four
+# digits, no letters. Stored normalised (no space, upper case) and lower-cased
+# on the wire, which is what the vendor's own client does.
+POSTCODE_RE = r"^[1-9][0-9]{3}([A-Z]{2})?$"
 
 # Dynalogic carries its status on three fields at once, and none of them alone
 # is a parcel status:

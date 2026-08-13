@@ -153,6 +153,11 @@ keeping:
 - **Never implement `full/ordernumber/{token}`** — a server-side AES decrypt.
   That is how e-mailed links authorize themselves; it cannot be constructed and
   there is no key to ship.
+- **`POSTCODE_RE` accepts NL (4 digits + 2 letters) and BE (4 digits, no
+  letters) shapes** — Dynalogic is legally "Dynalogic BeNeLux B.V." and
+  delivers in both countries, not NL-only as earlier revisions assumed. The
+  API itself does not care about country; this is still just our own
+  typo guard, so a bare 4-digit BE code and a 4+2 NL code both pass.
 
 ### Other integration decisions
 
