@@ -34,7 +34,7 @@ you act in one of these areas:
 
 ## Carrier-specific notes
 
-**API mechanics live in `carrier-research/api/dynalogic/` (private research
+**API mechanics live in `carrier-research/dynalogic/api/` (private research
 repo)** — the keyless middleware, the two `transportorder` routes, what the
 postcode actually does, the AES-token route we do not use, the status key
 domains and the payload reconstruction. Do not duplicate them here.
@@ -46,7 +46,7 @@ captured 2026-08-05 from a user's diagnostics and **completed 2026-08-06 from
 the same order's raw sensor attributes** (diagnostics redact, the sensor's `raw`
 attribute does not, so the second copy carried the `Addressee` and
 `ContactInformation` blocks the first had blanked whole). Redacted into
-`carrier-research/api/dynalogic/response-full-delivered.json` and into
+`carrier-research/dynalogic/api/response-full-delivered.json` and into
 `tests/payloads.py`. It corrected two things 0.9.0 asserted:
 
 - **`ExecutedDateTime` is naive ISO 8601** (`2026-08-04T13:34:10.507`), not
@@ -233,5 +233,5 @@ python -m pytest tests/ --cov=custom_components.dynalogic
 
 Coverage must stay **above 95%** (silver `test-coverage` rule). Run before
 committing. A code change updates the README + this file + `docs/` in the same
-commit; the API reference lives in this carrier's directory under the private
-`carrier-research/api/`, never in this repo.
+commit; the API reference lives in `carrier-research/dynalogic/api/` (this
+carrier's own directory in the private research repo), never in this repo.
