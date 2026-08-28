@@ -2,11 +2,8 @@
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
-import aiohttp
-import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.dynalogic.api import DynalogicApiError
 from custom_components.dynalogic.config_flow import (
     normalize_postcode,
     normalize_tracking_code,
@@ -157,155 +154,36 @@ def _init_input(
     }
 
 
-async def test_options_add_parcel_inherits_the_hub_postcode(hass):
-    entry = _hub([])
-    entry.add_to_hass(hass)
-
+async def _open_options_step(hass, entry, step_id: str):
+    """Start the options flow and select one of its two top-level routes."""
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup() as get_parcel:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1234567890")
-        )
-    assert result["type"] == "create_entry"
-    assert result["data"][CONF_PARCELS] == [_parcel("1234567890")]
-    get_parcel.assert_awaited_once_with("1234567890", POSTCODE)
+    assert result["type"] == "menu"
+    assert result["menu_options"] == ["parcels", "settings"]
+    return await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": step_id}
+    )
 
 
-async def test_options_add_parcel_with_its_own_postcode(hass):
-    """A parcel to another address overrides the hub's postcode."""
-    entry = _hub([])
+async def test_options_parcel_list_can_be_cleared(hass):
+    """A submitted empty list removes the final manually tracked parcel."""
+    entry = MockConfigEntry(domain=DOMAIN, options={CONF_PARCELS: [{CONF_TRACKING_CODE: "EXAMPLE111111"}], CONF_POSTAL_CODE: "1234AB"})
     entry.add_to_hass(hass)
-
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup():
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1234567890", postcode="3011 aa")
-        )
-    assert result["data"][CONF_PARCELS] == [_parcel("1234567890", OTHER_POSTCODE)]
-
-
-async def test_options_add_code_with_separators(hass):
-    """Pasted codes with spaces/dashes are sanitised like the consumer site."""
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup():
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1234-567 890")
-        )
-    assert result["data"][CONF_PARCELS] == [_parcel("1234567890")]
-
-
-@pytest.mark.parametrize(
-    "add,postcode,expected",
-    [
-        ("abc", "", "invalid_tracking_code"),
-        ("1234567890", "nope", "invalid_postcode"),
-    ],
-)
-async def test_options_add_rejects_bad_input_without_calling_the_api(
-    hass, add, postcode, expected
-):
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup() as get_parcel:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add=add, postcode=postcode)
-        )
-    assert result["errors"]["base"] == expected
-    get_parcel.assert_not_awaited()
-
-
-async def test_options_add_rejects_a_pair_the_carrier_does_not_know(hass):
-    """The one request adding a parcel costs: a wrong postcode is otherwise
-    invisible until the parcel never arrives."""
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup(result=None):
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1234567890")
-        )
-    assert result["errors"]["base"] == "parcel_not_found"
-
-
-@pytest.mark.parametrize(
-    "error", [DynalogicApiError("boom"), aiohttp.ClientError("offline")]
-)
-async def test_options_add_reports_an_unreachable_carrier(hass, error):
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup(error=error):
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1234567890")
-        )
-    assert result["errors"]["base"] == "cannot_connect"
-
-
-async def test_options_add_duplicate_rejected(hass):
-    entry = _hub([_parcel("1111111111")])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup() as get_parcel:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], _init_input(add="1111111111", remove=[])
-        )
-    assert result["errors"]["base"] == "already_tracked"
-    get_parcel.assert_not_awaited()
-
-
-async def test_options_remove_parcel(hass):
-    entry = _hub([_parcel("1111111111"), _parcel("2222222222")])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_step(hass, entry, "parcels")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], _init_input(remove=["1111111111"])
+        result["flow_id"], {"tracking_codes": []}
     )
     assert result["type"] == "create_entry"
-    codes = {p[CONF_TRACKING_CODE] for p in result["data"][CONF_PARCELS]}
-    assert codes == {"2222222222"}
+    assert result["data"][CONF_PARCELS] == []
 
 
-async def test_options_remove_then_readd_same_code(hass):
-    """Remove-then-add order: re-adding a just-removed code works."""
-    entry = _hub([_parcel("1111111111")])
+async def test_options_settings_preserve_parcel_list(hass):
+    """Saving settings must never replace the manually tracked parcel list."""
+    parcels = [{CONF_TRACKING_CODE: "EXAMPLE111111"}]
+    entry = MockConfigEntry(domain=DOMAIN, options={CONF_PARCELS: parcels, CONF_POSTAL_CODE: "1234AB"})
     entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    with _patch_lookup():
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"],
-            _init_input(add="1111111111", remove=["1111111111"]),
-        )
-    assert result["type"] == "create_entry"
-    assert result["data"][CONF_PARCELS] == [_parcel("1111111111")]
-
-
-async def test_options_keeps_the_hub_postcode(hass):
-    """The hub's own postcode survives an options submission untouched."""
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await _open_options_step(hass, entry, "settings")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], _init_input()
-    )
-    assert result["data"][CONF_POSTAL_CODE] == POSTCODE
-
-
-async def test_options_changes_interval_history_and_delivered(hass):
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await hass.config_entries.options.async_init(entry.entry_id)
-    result = await hass.config_entries.options.async_configure(
-        result["flow_id"],
-        _init_input(
-            interval="120",
-            history=True, filter_type="parcels", amount=5,
-        ),
+        result["flow_id"], {CONF_DELIVERED_FILTER_TYPE: "days", CONF_DELIVERED_FILTER_AMOUNT: 7, CONF_INCLUDE_HISTORY: False, CONF_REFRESH_INTERVAL: "30"}
     )
     assert result["type"] == "create_entry"
-    assert result["data"][CONF_REFRESH_INTERVAL] == 120
-    assert result["data"][CONF_INCLUDE_HISTORY] is True
-    assert result["data"][CONF_DELIVERED_FILTER_TYPE] == "parcels"
-    assert result["data"][CONF_DELIVERED_FILTER_AMOUNT] == 5
+    assert result["data"][CONF_PARCELS] == parcels

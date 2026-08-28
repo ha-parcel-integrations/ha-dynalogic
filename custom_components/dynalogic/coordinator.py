@@ -4,6 +4,7 @@ Fetching and event firing only — the parcel mapping lives in :mod:`.parcels`.
 That split is what lets the account-based variant swap this file out without
 duplicating the mapping code.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -50,8 +51,8 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
     """Polls each tracked parcel and publishes the canonical parcel lists.
 
     This carrier has no account or parcel feed, so the tracked parcels are the
-    ``{tracking_code, postal_code}`` pairs the user entered (stored in the entry
-    options). Each is fetched individually and merged into one list;
+    tracking codes the user entered (stored in the entry options). Every code
+    is fetched using the hub's postcode and merged into one list;
     ``coordinator.data`` is the active (not-yet-delivered) parcels,
     ``self.delivered`` the rest.
     """
@@ -84,9 +85,9 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         # that already existed when the integration started — otherwise every
         # restart would flood users with "registered" notifications.
         self._known_state: dict[str, ParcelStatus] | None = None
-        self._known_delivery_times: (
-            dict[str, tuple[str | None, str | None]] | None
-        ) = None
+        self._known_delivery_times: dict[str, tuple[str | None, str | None]] | None = (
+            None
+        )
         # Cached device id, attached to every fired event so device-trigger
         # automations can filter to this device.
         self._cached_device_id: str | None = None
@@ -109,25 +110,19 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         return self._cached_device_id
 
     def _tracked(self) -> list[tuple[str, str]]:
-        """Return the configured ``(tracking_code, postal_code)`` pairs.
-
-        Both halves are required: the postcode is what unlocks the parcel's
-        activity history, and without history a parcel is a status and nothing
-        else. A pair missing either half is skipped rather than fetched.
-        """
+        """Return every tracking code paired with this hub's postcode."""
+        postal_code = self.config_entry.options.get(CONF_POSTAL_CODE)
         return [
-            (item[CONF_TRACKING_CODE], item[CONF_POSTAL_CODE])
+            (item[CONF_TRACKING_CODE], postal_code)
             for item in self.config_entry.options.get(CONF_PARCELS, [])
-            if item.get(CONF_TRACKING_CODE) and item.get(CONF_POSTAL_CODE)
+            if item.get(CONF_TRACKING_CODE) and postal_code
         ]
 
     @property
     def _include_history(self) -> bool:
         """Whether the opt-in per-parcel history option is enabled."""
         return bool(
-            self.config_entry.options.get(
-                CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
-            )
+            self.config_entry.options.get(CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY)
         )
 
     async def _async_update_data(self) -> list[dict]:
@@ -154,9 +149,7 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         errors = 0
         for code, result in zip(codes, results):
             if isinstance(result, BaseException):
-                if not isinstance(
-                    result, (DynalogicApiError, aiohttp.ClientError)
-                ):
+                if not isinstance(result, (DynalogicApiError, aiohttp.ClientError)):
                     raise result
                 errors += 1
                 _LOGGER.warning("Dynalogic fetch failed for %s: %s", code, result)

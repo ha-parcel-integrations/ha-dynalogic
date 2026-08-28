@@ -16,11 +16,8 @@ from .payloads import POSTCODE, active_sample
 
 _SAMPLE = active_sample()
 CODE = "1234567890"
-OTHER_POSTCODE = "3011AA"
-
-
-def _parcel(code: str = CODE, postcode: str = POSTCODE) -> dict:
-    return {CONF_TRACKING_CODE: code, CONF_POSTAL_CODE: postcode}
+def _parcel(code: str = CODE) -> dict:
+    return {CONF_TRACKING_CODE: code}
 
 
 async def _setup(hass, parcels: list[dict] | None = None) -> MockConfigEntry:
@@ -56,7 +53,7 @@ async def test_track_parcel_inherits_the_hub_postcode(hass):
     assert entry.options[CONF_PARCELS] == [_parcel()]
 
 
-async def test_track_parcel_accepts_its_own_postcode(hass):
+async def test_track_parcel_validates_an_optional_postcode(hass):
     entry = await _setup(hass)
     await _call(
         hass,
@@ -64,7 +61,7 @@ async def test_track_parcel_accepts_its_own_postcode(hass):
         {CONF_TRACKING_CODE: CODE, CONF_POSTAL_CODE: "3011 aa"},
     )
 
-    assert entry.options[CONF_PARCELS] == [_parcel(postcode=OTHER_POSTCODE)]
+    assert entry.options[CONF_PARCELS] == [_parcel()]
 
 
 async def test_track_parcel_normalizes_code(hass):

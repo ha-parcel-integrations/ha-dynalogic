@@ -30,8 +30,8 @@ from .payloads import (
 OTHER_CODE = "8888888888"
 
 
-def _parcel(code: str, postcode: str = POSTCODE) -> dict:
-    return {CONF_TRACKING_CODE: code, CONF_POSTAL_CODE: postcode}
+def _parcel(code: str) -> dict:
+    return {CONF_TRACKING_CODE: code}
 
 
 def _entry_with(parcels: list[dict]) -> MockConfigEntry:
@@ -78,10 +78,9 @@ async def test_update_merges_multiple_parcels(hass):
     assert coordinator.last_success_time is not None
 
 
-async def test_update_sends_each_parcels_own_postcode(hass):
-    """The postcode is per parcel, not per hub — a parcel to another address
-    is fetched with its own."""
-    entry = _entry_with([_parcel(ACTIVE_CODE), _parcel(OTHER_CODE, "3011AA")])
+async def test_update_sends_the_hub_postcode_for_each_parcel(hass):
+    """All parcel codes in a hub use that hub's postcode."""
+    entry = _entry_with([_parcel(ACTIVE_CODE), _parcel(OTHER_CODE)])
     entry.add_to_hass(hass)
     client = AsyncMock()
     client.async_get_parcel.side_effect = lambda code, postcode: active_sample(code)
@@ -91,7 +90,7 @@ async def test_update_sends_each_parcels_own_postcode(hass):
 
     assert [call.args for call in client.async_get_parcel.await_args_list] == [
         (ACTIVE_CODE, POSTCODE),
-        (OTHER_CODE, "3011AA"),
+        (OTHER_CODE, POSTCODE),
     ]
 
 
@@ -180,11 +179,10 @@ async def test_update_reraises_unexpected_exceptions(hass):
 @pytest.mark.parametrize(
     "broken",
     [
-        {CONF_TRACKING_CODE: "", CONF_POSTAL_CODE: POSTCODE},
-        {CONF_TRACKING_CODE: ACTIVE_CODE},  # no postcode: nothing to ask with
+        {CONF_TRACKING_CODE: ""},
     ],
 )
-async def test_update_skips_incomplete_pairs(hass, broken):
+async def test_update_skips_parcels_without_a_code(hass, broken):
     entry = _entry_with([broken, _parcel(DELIVERED_CODE)])
     entry.add_to_hass(hass)
     client = AsyncMock()
