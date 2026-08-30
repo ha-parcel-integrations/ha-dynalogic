@@ -1,4 +1,5 @@
 """Tests for Dynalogic diagnostics."""
+from datetime import timedelta
 from unittest.mock import MagicMock
 
 from custom_components.dynalogic.diagnostics import (
@@ -18,6 +19,8 @@ async def _diagnostics(hass, parcel):
     }
     entry.runtime_data.coordinator.data = [parcel]
     entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.current_tier_minutes = 15
+    entry.runtime_data.coordinator.update_interval = timedelta(minutes=15)
     return await async_get_config_entry_diagnostics(hass, entry)
 
 
@@ -56,6 +59,37 @@ async def test_diagnostics_redacts_every_identifier_in_a_real_response(hass):
     assert order_data["Activities"][0]["Description"]
 
 
+async def test_diagnostics_surfaces_polling_state(hass):
+    """The tier and interval last computed by the coordinator, for support reports."""
+    result = await _diagnostics(hass, normalize_parcel(active_sample()))
+    assert result["polling"] == {
+        "tier_minutes": 15,
+        "update_interval_seconds": 900.0,
+        "suspended": False,
+    }
+
+
+async def test_diagnostics_reports_suspended_polling(hass):
+    """``update_interval is None`` (full stop) must be visible, not just absent."""
+    entry = MagicMock()
+    entry.options = {
+        "parcels": [{"tracking_code": ACTIVE_CODE, "postal_code": POSTCODE}],
+        "postal_code": POSTCODE,
+    }
+    entry.runtime_data.coordinator.data = []
+    entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.current_tier_minutes = None
+    entry.runtime_data.coordinator.update_interval = None
+
+    result = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert result["polling"] == {
+        "tier_minutes": None,
+        "update_interval_seconds": None,
+        "suspended": True,
+    }
+
+
 async def test_diagnostics_redacts_and_counts(hass):
     """Diagnostics get pasted into public issues — nothing identifying may survive."""
     entry = MagicMock()
@@ -63,6 +97,8 @@ async def test_diagnostics_redacts_and_counts(hass):
         "parcels": [{"tracking_code": ACTIVE_CODE, "postal_code": POSTCODE}],
         "postal_code": POSTCODE,
     }
+    entry.runtime_data.coordinator.current_tier_minutes = None
+    entry.runtime_data.coordinator.update_interval = None
     entry.runtime_data.coordinator.data = [
         {
             "barcode": ACTIVE_CODE,

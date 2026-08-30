@@ -25,15 +25,12 @@ from .const import (
     CONF_INCLUDE_HISTORY,
     CONF_PARCELS,
     CONF_POSTAL_CODE,
-    CONF_REFRESH_INTERVAL,
     CONF_TRACKING_CODE,
     DEFAULT_DELIVERED_FILTER_AMOUNT,
     DEFAULT_DELIVERED_FILTER_TYPE,
     DEFAULT_INCLUDE_HISTORY,
-    DEFAULT_REFRESH_INTERVAL,
     DOMAIN,
     POSTCODE_RE,
-    REFRESH_INTERVAL_OPTIONS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -106,17 +103,6 @@ async def async_parcel_error(hass, tracking_code: str, postal_code: str) -> str 
     return None if parcel is not None else "parcel_not_found"
 
 
-def _interval_selector() -> selector.SelectSelector:
-    """Return the refresh-interval dropdown selector (options translated via strings)."""
-    return selector.SelectSelector(
-        selector.SelectSelectorConfig(
-            options=[str(m) for m in REFRESH_INTERVAL_OPTIONS],
-            translation_key=CONF_REFRESH_INTERVAL,
-            mode=selector.SelectSelectorMode.DROPDOWN,
-        )
-    )
-
-
 class DynalogicConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the UI-driven configuration flow for the Dynalogic integration."""
 
@@ -162,7 +148,6 @@ class DynalogicConfigFlow(ConfigFlow, domain=DOMAIN):
                         CONF_POSTAL_CODE: postal_code,
                         CONF_DELIVERED_FILTER_TYPE: DEFAULT_DELIVERED_FILTER_TYPE,
                         CONF_DELIVERED_FILTER_AMOUNT: DEFAULT_DELIVERED_FILTER_AMOUNT,
-                        CONF_REFRESH_INTERVAL: DEFAULT_REFRESH_INTERVAL,
                         CONF_INCLUDE_HISTORY: DEFAULT_INCLUDE_HISTORY,
                     },
                 )
@@ -178,7 +163,7 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
     """Manage tracked parcels, history and polling in one sectioned form.
 
     Mirrors the other suite carriers' section layout (here: ``parcels`` /
-    ``delivered`` / ``history`` / ``polling``). Adding a parcel needs only its
+    ``delivered`` / ``history``). Adding a parcel needs only its
     order number — the postcode is inherited from the hub unless the parcel
     goes to a different address, in which case the second field takes it.
     Changes apply live via HA's options-update listener (which refreshes the
@@ -259,7 +244,6 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
                         user_input[CONF_DELIVERED_FILTER_AMOUNT]
                     ),
                     CONF_INCLUDE_HISTORY: bool(user_input[CONF_INCLUDE_HISTORY]),
-                    CONF_REFRESH_INTERVAL: int(user_input[CONF_REFRESH_INTERVAL]),
                 },
             )
 
@@ -297,12 +281,6 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
                             CONF_INCLUDE_HISTORY, DEFAULT_INCLUDE_HISTORY
                         ),
                     ): selector.BooleanSelector(),
-                    vol.Required(
-                        CONF_REFRESH_INTERVAL,
-                        default=str(
-                            current.get(CONF_REFRESH_INTERVAL, DEFAULT_REFRESH_INTERVAL)
-                        ),
-                    ): _interval_selector(),
                 }
             ),
         )

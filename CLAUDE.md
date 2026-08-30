@@ -183,24 +183,48 @@ keeping:
   next to our snake_case one — the capture arrived with `barcode` redacted while
   `OrderData.OrderLines[].Barcode` and `CustomerOrderNumber` went out in the
   clear, which is exactly the failure mode. Adding a key is cheap; test it.
-- **Rate limiting is unknown** (a few dozen probes, nothing observed), which is
-  why the interval stays user-visible and the default gentle. If reports of
-  throttling arrive, this is a `--interval fixed` carrier.
+- **Rate limiting is unknown** (a few dozen probes, nothing observed). Polling
+  is dynamic and status-driven (see "Dynamic polling" below), which already
+  keeps steady-state traffic gentle; if reports of throttling arrive, that is
+  a carrier-specific divergence to document here, not a config option to add
+  back.
 
 ## Options and reloads
 
 The options flow is one sectioned form (`data_entry_flow.section`); changes apply
 without a restart. Two models, **do not mix them**:
 - **Account-less carriers** (the default) apply changes live: an update listener
-  retunes `coordinator.update_interval` and calls `async_request_refresh()`, so
-  added/removed parcel sensors appear immediately.
+  calls `async_request_refresh()`, so added/removed parcel sensors appear
+  immediately (this is also the resume path after polling has fully suspended
+  — see "Dynamic polling" below).
 - **Account-based carriers** call `async_schedule_reload` on submit and register
   **no** update listener. Combining a listener with a reload-on-update flow is
   deprecated, an error in HA 2026.12+.
 
-The user-tunable poll interval is a deliberate HACS divergence (see
-CONVENTIONS.md); a carrier that throttles is generated with a fixed cadence and no
-polling option at all.
+## Dynamic polling
+
+There is no user-facing polling interval — this is a deliberate suite-wide
+choice, not a gap. `coordinator.py` recomputes `update_interval` at the end of
+every refresh:
+
+- **Quiet window:** no polling 00:00–06:00 local time, except two daily
+  anchors (~00:00 and ~06:00) for overnight / end-of-day catch-up.
+- **Tiers while polling:** *hot* (15 min) when a tracked, not-yet-delivered
+  parcel is `out_for_delivery` within an hour of its `planned_from` (or has no
+  `planned_from` at all — the only case this carrier's payload has ever
+  produced, since no delivery-window field is known yet); *mid* (45 min) for
+  anything else still in flight — `problem`/`returning` included, deliberately
+  not hot.
+- **Full stop:** `update_interval = None` when nothing is tracked or every
+  tracked parcel is delivered. Resumes the moment a parcel is added back, via
+  the options-flow refresh above.
+- **Stagger:** a small, stable per-install offset (hash of the config entry
+  id) is added to every computed interval so installs don't all hit an anchor
+  or tier boundary at the same second.
+
+Full algorithm and reasoning: `carrier-research/dynamic-polling.md`. A carrier
+that genuinely throttles or soft-bans traffic harder than this handles is a
+documented, local divergence in this file — not a config option to add back.
 
 ## Module layout
 

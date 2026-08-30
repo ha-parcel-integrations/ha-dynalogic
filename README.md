@@ -84,7 +84,27 @@ Open **Configure** on the integration entry:
 | Parcels | Postcode | hub postcode | Only for a parcel delivered to a different address than the one you set up. |
 | Delivered parcels | Filter by / amount | last 7 days | How long delivered parcels stay visible on the delivered sensor. |
 | Parcel history | Include status history | off | Adds a `history` attribute per parcel with each status update. |
-| Polling | Refresh every | 30 min | How often Dynalogic is checked. Slower is gentler on their API. |
+
+## Dynamic polling
+
+Instead of polling Dynalogic at the same rate around the clock, the
+integration adjusts its own cadence to what your tracked parcels are
+actually doing:
+
+- **Quiet hours** — no polling between 00:00–06:00 local time, aside from one
+  catch-up check at each end of that window (around midnight and around 6
+  a.m.).
+- **Hot (every 15 minutes)** — while any tracked, not-yet-delivered parcel is
+  `out_for_delivery` today. No real Dynalogic payload has ever named a
+  delivery window, so this fires as soon as a parcel reaches that status,
+  rather than waiting for a "within the hour" check that has nothing to test
+  against.
+- **Mid (every 45 minutes)** — otherwise, for anything still in flight.
+- **Fully stopped** — when nothing is tracked, or every tracked parcel has
+  been delivered. Polling resumes immediately the moment a parcel is added
+  back.
+- A small, fixed per-hub offset is added on top, so not every Dynalogic hub
+  out there polls at exactly the same second.
 
 ## Removal
 
@@ -189,7 +209,7 @@ statuses and events.
 
 ## Disclaimer
 
-This integration uses the same public tracking endpoint as Dynalogic's own app. It is not affiliated with, endorsed by, or supported by Dynalogic or Dyna Group. Be gentle with the polling interval.
+This integration uses the same public tracking endpoint as Dynalogic's own app. It is not affiliated with, endorsed by, or supported by Dynalogic or Dyna Group.
 
 ## Contributing
 
