@@ -54,7 +54,7 @@
               "include_history": "Statusgeschiedenis toevoegen"
             },
             "data_description": {
-              "include_history": "Voegt per pakket een history-attribuut toe met elke statusupdate (tijdstip, status, originele tekst). Standaard uit."
+              "include_history": "Voegt per pakket een geschiedenisattribuut toe met elke statusupdate (tijdstip, status, oorspronkelijke tekst). Standaard uit."
             }
           }
         },
@@ -64,7 +64,7 @@
         }
       },
       "parcels": {
-        "title": "Pakketten",
+        "title": "Pakketten beheren",
         "data": {
           "tracking_codes": "Trackingcodes"
         }
@@ -74,14 +74,14 @@
         "data": {
           "delivered_filter_type": "Bezorgde pakketten: filteren op",
           "delivered_filter_amount": "Bezorgde pakketten: aantal",
-          "include_history": "Statusgeschiedenis opnemen"
+          "include_history": "Statusgeschiedenis toevoegen"
         }
       }
     },
     "error": {
       "invalid_tracking_code": "Dat lijkt geen Dynalogic-ordernummer.",
       "invalid_postcode": "Dat is geen Nederlandse of Belgische postcode. Gebruik vier cijfers, met twee letters voor een Nederlandse postcode, bijv. 1012AB of 1000.",
-      "already_tracked": "Dat pakket wordt al gevolgd.",
+      "already_tracked": "Dit pakket wordt al gevolgd.",
       "parcel_not_found": "Dynalogic kent dat ordernummer niet met deze postcode. Controleer allebei — de postcode moet het bezorgadres van het pakket zijn.",
       "cannot_connect": "Dynalogic is niet bereikbaar. Probeer het zo nog eens."
     }
