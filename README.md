@@ -48,7 +48,6 @@ Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) 
 
 ## Requirements
 
-- Home Assistant 2024.12 or newer
 - A Dynalogic order number (from the shipping confirmation or the tracking
   mail) **and** the postcode the parcel is being delivered to — no account
   needed. Dynalogic uses the postcode to prove you may see the parcel's
