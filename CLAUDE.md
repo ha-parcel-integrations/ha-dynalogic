@@ -34,6 +34,12 @@ you act in one of these areas:
 
 ## Carrier-specific notes
 
+**No `awaiting_pickup` sensor, deliberately.** Dynalogic delivers to the
+door; its `DP_*` drop-off scenarios are a job type, not a parcel waiting in
+a shop, so nothing in `map_parcel_status` ever produces
+`ParcelStatus.AT_PICKUP_POINT` (`parcels.py`). Structural, not a gap — see
+`.github/CONVENTIONS.md`'s pickup-point convention.
+
 **API mechanics live in `carrier-research/dynalogic/api/` (private research
 repo)** — the keyless middleware, the two `transportorder` routes, what the
 postcode actually does, the AES-token route we do not use, the status key
