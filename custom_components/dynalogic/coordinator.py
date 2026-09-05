@@ -72,7 +72,7 @@ def _next_anchor(now: datetime) -> datetime:
 
 
 def _hottest_tier_minutes(active_parcels: list[dict], now: datetime) -> int | None:
-    """Tier for the barcode-based model (dynamic-polling.md Section 2.1).
+    """Tier for the barcode-based model (Section 2.1).
 
     ``None`` means "stop polling entirely" — nothing is tracked, or every
     tracked parcel is already delivered (already filtered out of
@@ -146,10 +146,9 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
             # base class, which every helper below relies on.
             config_entry=entry,
             name=DOMAIN,
-            # Recomputed at the end of every refresh (dynamic-polling.md
-            # Section 2.1) — start with the hot cadence so the very first
-            # poll, right after setup, happens promptly regardless of what it
-            # finds.
+            # Recomputed at the end of every refresh (Section 2.1) — start
+            # with the hot cadence so the very first poll, right after
+            # setup, happens promptly regardless of what it finds.
             update_interval=timedelta(minutes=HOT_INTERVAL_MINUTES),
         )
         self._client = client
