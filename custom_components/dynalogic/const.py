@@ -62,9 +62,6 @@ CAPABILITIES = frozenset({"history"})
 # returns progress only; it is kept for the config flow, where it can separate
 # "unknown order number" from "wrong postcode for this order".
 #
-# Full write-up in this carrier's directory under the private
-# `carrier-research/api/` — endpoints, the postcode's role, the status
-# vocabularies and the (unconfirmed) payload shape.
 API_BASE_URL = "https://api.dynagroup.nl/track-middleware/v1"
 TRACKING_API_URL = (
     f"{API_BASE_URL}/transportorder/full/ordernumber/{{ordernumber}}"
@@ -140,8 +137,8 @@ MAX_ACTIVE_STEP = 4
 # so every read of a field is greppable from one place.
 #
 # The keys below marked *observed* were confirmed against a real delivered
-# `full` response (captured 2026-08-05, one order, redacted copy in
-# `carrier-research/api/dynalogic/`). The rest are still reconstruction.
+# `full` response (captured 2026-08-05, one order). The rest are still
+# reconstruction.
 KEY_TRACKING_NUMBER = "TrackAndTraceNumber"   # observed
 KEY_RESULT_CODE = "TransportResultCode"       # observed
 KEY_SCENARIO = "Scenario"                     # observed
@@ -220,8 +217,7 @@ DEFAULT_DELIVERED_FILTER_TYPE = "days"
 DEFAULT_DELIVERED_FILTER_AMOUNT = 7
 
 # Dynamic, status-driven polling — unconditional, no user-facing interval
-# option. See carrier-research/dynamic-polling.md for the full algorithm and
-# the reasoning behind it.
+# option.
 #
 # Quiet window: no polling between these local hours except the two anchors
 # below, for overnight / end-of-day catch-up.
