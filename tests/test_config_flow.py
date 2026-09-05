@@ -2,8 +2,10 @@
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
+import aiohttp
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.dynalogic.api import DynalogicApiError
 from custom_components.dynalogic.config_flow import (
     normalize_postcode,
     normalize_tracking_code,
@@ -184,3 +186,83 @@ async def test_options_settings_preserve_parcel_list(hass):
     )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_PARCELS] == parcels
+
+
+async def test_options_add_parcel_rejects_an_invalid_code(hass):
+    """An obviously malformed code never reaches the API check."""
+    entry = _hub([])
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup() as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["AB"]}
+        )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "invalid_tracking_code"
+    get_parcel.assert_not_called()
+
+
+async def test_options_add_parcel_rejects_an_invalid_hub_postcode(hass):
+    """A stored hub postcode that is no longer valid blocks adding a parcel."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, options={CONF_PARCELS: [], CONF_POSTAL_CODE: "nope"}
+    )
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup() as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["EXAMPLE111111"]}
+        )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "invalid_postcode"
+    get_parcel.assert_not_called()
+
+
+async def test_options_add_parcel_reports_a_transport_error(hass):
+    """A connection failure while verifying a new code surfaces as cannot_connect."""
+    entry = _hub([])
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup(error=aiohttp.ClientError()) as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["EXAMPLE111111"]}
+        )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "cannot_connect"
+    get_parcel.assert_called_once()
+
+
+async def test_options_add_parcel_reports_an_unknown_order(hass):
+    """A carrier 404 (unknown order number or wrong postcode) blocks the add."""
+    entry = _hub([])
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup(result=None) as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["EXAMPLE111111"]}
+        )
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "parcel_not_found"
+    get_parcel.assert_called_once()
+
+
+async def test_options_add_parcel_accepts_a_verified_code(hass):
+    """A code that resolves against the API is added to the tracked list."""
+    entry = _hub([])
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup() as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["EXAMPLE111111"]}
+        )
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_PARCELS] == [{CONF_TRACKING_CODE: "EXAMPLE111111"}]
+    get_parcel.assert_called_once()
+
+
+async def test_async_parcel_error_reports_cannot_connect_on_api_error(hass):
+    """DynalogicApiError from the client is treated the same as a transport error."""
+    with _patch_lookup(error=DynalogicApiError("boom")):
+        from custom_components.dynalogic.config_flow import async_parcel_error
+
+        assert await async_parcel_error(hass, "EXAMPLE111111", POSTCODE) == "cannot_connect"
