@@ -52,12 +52,12 @@ def test_normalize_tracking_code_strips_and_uppercases():
     assert normalize_tracking_code(None) == ""
 
 
-def test_valid_tracking_code_is_deliberately_generous():
-    """Dynalogic publishes no order-number format and validates none itself."""
+def test_valid_tracking_code_accepts_any_non_empty_code():
+    """Dynalogic publishes no order-number format; only emptiness is rejected."""
     assert valid_tracking_code("1234567890")
     assert valid_tracking_code("ABC12345")
-    assert not valid_tracking_code("ABC")  # too short
-    assert not valid_tracking_code("A" * 31)  # too long
+    assert valid_tracking_code("AB")
+    assert not valid_tracking_code("")
 
 
 def test_normalize_and_validate_postcode():
@@ -186,20 +186,6 @@ async def test_options_settings_preserve_parcel_list(hass):
     )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_PARCELS] == parcels
-
-
-async def test_options_add_parcel_rejects_an_invalid_code(hass):
-    """An obviously malformed code never reaches the API check."""
-    entry = _hub([])
-    entry.add_to_hass(hass)
-    result = await _open_options_step(hass, entry, "parcels")
-    with _patch_lookup() as get_parcel:
-        result = await hass.config_entries.options.async_configure(
-            result["flow_id"], {"tracking_codes": ["AB"]}
-        )
-    assert result["type"] == "form"
-    assert result["errors"]["base"] == "invalid_tracking_code"
-    get_parcel.assert_not_called()
 
 
 async def test_options_add_parcel_rejects_an_invalid_hub_postcode(hass):

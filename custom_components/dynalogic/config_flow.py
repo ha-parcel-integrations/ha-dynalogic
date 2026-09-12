@@ -35,13 +35,6 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# The order number as printed on the shipping confirmation or the tracking
-# mail. Deliberately generous: Dynalogic publishes no format, neither of its
-# own clients validates one, and a 10-digit and an alphanumeric probe were
-# treated identically by the API. A false negative here — rejecting a code that
-# would have worked — is far worse than accepting a bad one, which simply comes
-# back "not found". Narrow it once real order numbers show a shape.
-_TRACKING_CODE_RE = re.compile(r"^[A-Z0-9]{4,30}$")
 _POSTCODE_RE = re.compile(POSTCODE_RE)
 
 
@@ -56,8 +49,8 @@ def normalize_tracking_code(value: str) -> str:
 
 
 def valid_tracking_code(value: str) -> bool:
-    """Whether ``value`` looks like a Dynalogic order number."""
-    return bool(_TRACKING_CODE_RE.match(value))
+    """Accept every non-empty code; Dynalogic publishes no format to gate on."""
+    return bool(value)
 
 
 def normalize_postcode(value: str) -> str:
