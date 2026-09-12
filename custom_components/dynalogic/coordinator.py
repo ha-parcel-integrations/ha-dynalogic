@@ -158,6 +158,12 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         # dropping its sensor. Lives for the integration's lifetime (resets on
         # restart).
         self._raw_cache: dict[str, dict] = {}
+        # Tracking codes confirmed delivered on a prior refresh — excluded
+        # from the fetch this cycle since a delivered parcel's payload can
+        # never change again. Keyed on the code the request was made with,
+        # not the barcode (a never-scanned parcel has no barcode). Lives for
+        # the integration's lifetime (resets on restart).
+        self._delivered_codes: set[str] = set()
         # barcode -> last seen ParcelStatus / (planned_from, planned_to).
         # ``None`` on the first refresh so events are suppressed for parcels
         # that already existed when the integration started — otherwise every
@@ -180,6 +186,11 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
     def current_tier_minutes(self) -> int | None:
         """Tier minutes computed on the last refresh (diagnostics only)."""
         return self._current_tier_minutes
+
+    @property
+    def delivered_codes(self) -> set[str]:
+        """Tracking codes currently skipped from the fetch (diagnostics only)."""
+        return self._delivered_codes
 
     def _device_id(self) -> str | None:
         """Resolve (and cache) this entry's device id for event payloads."""
@@ -223,18 +234,29 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         self._raw_cache = {
             code: raw for code, raw in self._raw_cache.items() if code in tracked_codes
         }
+        self._delivered_codes &= tracked_codes
+
+        # A delivered parcel's payload can never change again, so it is
+        # dropped from the fetch — not from ``pairs``/the options list, which
+        # stays untouched until the user removes it by hand.
+        pairs_to_fetch = [
+            (code, postal_code)
+            for code, postal_code in pairs
+            if code not in self._delivered_codes
+        ]
+        codes_to_fetch = [code for code, _ in pairs_to_fetch]
 
         results = await asyncio.gather(
             *(
                 self._client.async_get_parcel(code, postal_code)
-                for code, postal_code in pairs
+                for code, postal_code in pairs_to_fetch
             ),
             return_exceptions=True,
         )
 
-        raws: list[dict] = []
+        raws_by_code: dict[str, dict] = {}
         errors = 0
-        for code, result in zip(codes, results):
+        for code, result in zip(codes_to_fetch, results):
             if isinstance(result, BaseException):
                 if not isinstance(result, (DynalogicApiError, aiohttp.ClientError)):
                     raise result
@@ -242,7 +264,7 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
                 _LOGGER.warning("Dynalogic fetch failed for %s: %s", code, result)
                 cached = self._raw_cache.get(code)
                 if cached is not None:
-                    raws.append(cached)
+                    raws_by_code[code] = cached
                 continue
 
             if result is None:
@@ -253,7 +275,7 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
                 cached = self._raw_cache.get(code)
                 if cached is None:
                     report_unknown_parcel(code)
-                raws.append(cached or {KEY_TRACKING_NUMBER: code})
+                raws_by_code[code] = cached or {KEY_TRACKING_NUMBER: code}
                 continue
 
             # The response's own tracking number can be missing on edge
@@ -264,17 +286,31 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
             # once about anything in it we do not account for.
             check_response_shape(result)
             self._raw_cache[code] = result
-            raws.append(result)
+            raws_by_code[code] = result
 
-        if codes and errors == len(codes) and not raws:
+        # Codes skipped from the fetch above (already confirmed delivered) —
+        # re-add their cached payload so the delivered sensor keeps its data
+        # until the retention filter drops it.
+        for code in self._delivered_codes:
+            cached = self._raw_cache.get(code)
+            if cached is not None:
+                raws_by_code[code] = cached
+
+        if codes_to_fetch and errors == len(codes_to_fetch) and not raws_by_code:
             raise UpdateFailed("Dynalogic unreachable for all tracked parcels")
 
         include_history = self._include_history
-        normalized = [
-            normalize_parcel(raw, include_history=include_history) for raw in raws
+        entries = [
+            (code, normalize_parcel(raw, include_history=include_history))
+            for code, raw in raws_by_code.items()
         ]
-        active = [parcel for parcel in normalized if not parcel["delivered"]]
-        delivered = [parcel for parcel in normalized if parcel["delivered"]]
+        active = [parcel for _, parcel in entries if not parcel["delivered"]]
+        delivered = [parcel for _, parcel in entries if parcel["delivered"]]
+        # Rebuilt fresh from this cycle's data — a code whose payload just
+        # flipped to delivered is skipped starting next cycle; one that
+        # somehow un-delivers (should not happen, but the fetch list must
+        # never permanently drop a code) rejoins it automatically.
+        self._delivered_codes = {code for code, parcel in entries if parcel["delivered"]}
 
         self.delivered = apply_delivered_filter(
             sort_parcels_by_ts(delivered, "delivered_at", descending=True),
@@ -298,9 +334,9 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         }
 
         # Only stamp the diagnostic timestamp when at least one fetch actually
-        # succeeded (or nothing is tracked) — a poll served entirely from cache
-        # must not present itself as a successful update.
-        if not codes or errors < len(codes):
+        # succeeded (or nothing needed fetching) — a poll served entirely from
+        # cache must not present itself as a successful update.
+        if not codes_to_fetch or errors < len(codes_to_fetch):
             self.last_success_time = datetime.now(timezone.utc)
 
         now = dt_util.now()

@@ -19,6 +19,7 @@ async def _diagnostics(hass, parcel):
     }
     entry.runtime_data.coordinator.data = [parcel]
     entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.delivered_codes = set()
     entry.runtime_data.coordinator.current_tier_minutes = 15
     entry.runtime_data.coordinator.update_interval = timedelta(minutes=15)
     return await async_get_config_entry_diagnostics(hass, entry)
@@ -78,6 +79,7 @@ async def test_diagnostics_reports_suspended_polling(hass):
     }
     entry.runtime_data.coordinator.data = []
     entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.delivered_codes = set()
     entry.runtime_data.coordinator.current_tier_minutes = None
     entry.runtime_data.coordinator.update_interval = None
 
@@ -119,10 +121,15 @@ async def test_diagnostics_redacts_and_counts(hass):
         }
     ]
     entry.runtime_data.coordinator.delivered = []
+    entry.runtime_data.coordinator.delivered_codes = set()
 
     result = await async_get_config_entry_diagnostics(hass, entry)
 
-    assert result["counts"] == {"incoming_active": 1, "delivered": 0}
+    assert result["counts"] == {
+        "incoming_active": 1,
+        "delivered": 0,
+        "skipped_from_fetch": 0,
+    }
     # order numbers and postcodes are redacted at every nesting level
     options_parcel = result["entry_options"]["parcels"][0]
     assert options_parcel["tracking_code"] == "**REDACTED**"
