@@ -13,7 +13,7 @@ A custom Home Assistant integration that tracks your [Dynalogic](https://track.m
 
 > **This is a pre-1.0 release.** Dynalogic publishes no documentation for the data it returns. This integration was built without a real parcel to check it against, and one user's report has since confirmed most of it — including a fix for a bug that was quietly throwing away every parcel's delivery history. What is still missing is the **delivery window**: the only response we have ever seen was of an already-delivered parcel, which does not carry one, so the *next delivery* sensor and the calendar stay empty for now. Anything the integration does not recognise is logged as a warning with a link to report it — those reports are what gets this to 1.0.
 
-Part of the [ha-parcel-integrations](https://github.com/ha-parcel-integrations) family: it publishes the same canonical parcel format, statuses and events as the other carrier integrations, so it plugs straight into the [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) and cross-carrier automations.
+Part of the [ha-parcel-integrations](https://ha-parcel-integrations.io) family: it publishes the same canonical parcel format, statuses and events as the other carrier integrations, so it plugs straight into the [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) and cross-carrier automations.
 
 ## Contents
 
@@ -199,13 +199,13 @@ logger:
 
 ## Related integrations
 
-This integration is part of [**ha-parcel-integrations**](https://github.com/ha-parcel-integrations) — a family of
+This integration is part of [**ha-parcel-integrations**](https://ha-parcel-integrations.io) — a family of
 parcel-carrier integrations that all publish the same canonical parcel format,
 statuses and events.
 
 - [**Parcel Aggregator**](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) rolls every installed carrier
   up into one set of sensors.
-- Browse [the organisation](https://github.com/ha-parcel-integrations) for the current list of supported carriers.
+- Browse [the organisation](https://ha-parcel-integrations.io) for the current list of supported carriers.
 
 ## Disclaimer
 
