@@ -43,6 +43,10 @@ KNOWN_CAPABILITIES = frozenset(
 # weight/dimensions — only history is populated.
 CAPABILITIES = frozenset({"history"})
 
+# Fields not confirmed yet — the docs site shows them as "awaiting data".
+# Move a field into the declaration above once a real parcel shows it.
+PENDING_CAPABILITIES = frozenset({"delivery_window"})
+
 # The two endpoints the integration talks to. Both live on the *app*
 # middleware, not on the website's `/api` mirror: the middleware is versioned,
 # needs no headers at all, and is what the vendor's own app calls. The website
