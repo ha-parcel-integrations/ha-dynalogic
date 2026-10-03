@@ -48,7 +48,7 @@ a shop, so nothing in `map_parcel_status` ever produces
 
 **API mechanics live in `carrier-research/dynalogic/api/` (private research
 repo)** — the keyless middleware, the two `transportorder` routes, what the
-postcode actually does, the AES-token route we do not use, the status key
+postcode actually does, the token route we do not use, the status key
 domains and the payload reconstruction. Do not duplicate them here.
 
 ### The thing to know before changing anything
@@ -162,9 +162,8 @@ keeping:
   from "wrong postcode" in the config flow, but that truth table is read off
   route semantics and no real order has exercised it. `api.py` carries the note
   and `const.TRACKING_API_PARTIAL_URL` is ready.
-- **Never implement `full/ordernumber/{token}`** — a server-side AES decrypt.
-  That is how e-mailed links authorize themselves; it cannot be constructed and
-  there is no key to ship.
+- **Never implement `full/ordernumber/{token}`** — it is how
+  e-mailed links authorize themselves and cannot be constructed from user input.
 - **`POSTCODE_RE` accepts NL (4 digits + 2 letters) and BE (4 digits, no
   letters) shapes** — Dynalogic is legally "Dynalogic BeNeLux B.V." and
   delivers in both countries, not NL-only as earlier revisions assumed. The
