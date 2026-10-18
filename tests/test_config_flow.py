@@ -204,6 +204,26 @@ async def test_options_add_parcel_rejects_an_invalid_hub_postcode(hass):
     get_parcel.assert_not_called()
 
 
+async def test_options_keep_a_parcels_own_postcode(hass):
+    """Editing the list keeps a postcode set through the action, and checks with it."""
+    entry = _hub([_parcel("EXAMPLE111111", "3011AA")])
+    entry.add_to_hass(hass)
+    result = await _open_options_step(hass, entry, "parcels")
+    with _patch_lookup() as get_parcel:
+        result = await hass.config_entries.options.async_configure(
+            result["flow_id"], {"tracking_codes": ["EXAMPLE111111", "EXAMPLE222222"]}
+        )
+    assert result["type"] == "create_entry"
+    assert result["data"][CONF_PARCELS] == [
+        _parcel("EXAMPLE111111", "3011AA"),
+        {CONF_TRACKING_CODE: "EXAMPLE222222"},
+    ]
+    assert [c.args for c in get_parcel.call_args_list] == [
+        ("EXAMPLE111111", "3011AA"),
+        ("EXAMPLE222222", POSTCODE),
+    ]
+
+
 async def test_options_add_parcel_reports_a_transport_error(hass):
     """A connection failure while verifying a new code surfaces as cannot_connect."""
     entry = _hub([])

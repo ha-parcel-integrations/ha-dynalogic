@@ -157,8 +157,8 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
 
     Mirrors the other suite carriers' section layout (here: ``parcels`` /
     ``delivered`` / ``history``). Adding a parcel needs only its
-    order number — the postcode is inherited from the hub unless the parcel
-    goes to a different address, in which case the second field takes it.
+    order number — the postcode is inherited from the hub. A parcel going to a
+    different address gets its own postcode through the ``track_parcel`` action.
     Changes apply live via HA's options-update listener (which refreshes the
     coordinator), so new/removed per-parcel sensors appear and disappear
     immediately.
@@ -192,8 +192,17 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
             elif not valid_postcode(hub_postcode):
                 errors["base"] = "invalid_postcode"
             else:
+                # A parcel added through the action may carry its own
+                # postcode; keep it so editing the list does not drop it.
+                own = {
+                    item[CONF_TRACKING_CODE]: item[CONF_POSTAL_CODE]
+                    for item in _current_parcels(self.config_entry)
+                    if item.get(CONF_POSTAL_CODE)
+                }
                 for code in codes:
-                    if error := await async_parcel_error(self.hass, code, hub_postcode):
+                    if error := await async_parcel_error(
+                        self.hass, code, own.get(code, hub_postcode)
+                    ):
                         errors["base"] = error
                         break
             if not errors:
@@ -201,7 +210,11 @@ class DynalogicOptionsFlowHandler(OptionsFlow):
                     title="",
                     data={
                         **self.config_entry.options,
-                        CONF_PARCELS: [{CONF_TRACKING_CODE: code} for code in codes],
+                        CONF_PARCELS: [
+                            {CONF_TRACKING_CODE: code}
+                            | ({CONF_POSTAL_CODE: own[code]} if code in own else {})
+                            for code in codes
+                        ],
                     },
                 )
 

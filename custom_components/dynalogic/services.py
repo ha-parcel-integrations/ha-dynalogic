@@ -23,8 +23,6 @@ from .const import CONF_PARCELS, CONF_POSTAL_CODE, CONF_TRACKING_CODE, DOMAIN
 SERVICE_TRACK_PARCEL = "track_parcel"
 SERVICE_UNTRACK_PARCEL = "untrack_parcel"
 
-# ``postal_code`` remains accepted for backward-compatible service calls, but
-# every tracked code uses the hub's configured postcode.
 _TRACK_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_TRACKING_CODE): cv.string,
@@ -71,7 +69,10 @@ def async_setup_services(hass: HomeAssistant) -> None:
         parcels = [dict(p) for p in entry.options.get(CONF_PARCELS, [])]
         if any(p[CONF_TRACKING_CODE] == tracking_code for p in parcels):
             return  # already tracked — no-op
-        parcels.append({CONF_TRACKING_CODE: tracking_code})
+        parcel = {CONF_TRACKING_CODE: tracking_code}
+        if postal_code != entry.options.get(CONF_POSTAL_CODE):
+            parcel[CONF_POSTAL_CODE] = postal_code
+        parcels.append(parcel)
         hass.config_entries.async_update_entry(
             entry, options={**entry.options, CONF_PARCELS: parcels}
         )

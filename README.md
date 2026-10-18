@@ -2,7 +2,7 @@
 
 [![Release](https://img.shields.io/github/v/release/ha-parcel-integrations/ha-dynalogic.svg)](https://github.com/ha-parcel-integrations/ha-dynalogic/releases)
 [![Downloads](https://img.shields.io/github/downloads/ha-parcel-integrations/ha-dynalogic/total.svg)](https://github.com/ha-parcel-integrations/ha-dynalogic/releases)
-[![HACS](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
+[![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
@@ -58,9 +58,8 @@ Part of the [ha-parcel-integrations](https://ha-parcel-integrations.github.io/) 
 
 ### HACS (recommended)
 
-1. In HACS, choose the three-dot menu → **Custom repositories**.
-2. Add `https://github.com/ha-parcel-integrations/ha-dynalogic` as an **Integration**.
-3. Install **Dynalogic** and restart Home Assistant.
+1. Open HACS and search for **Dynalogic**.
+2. Install it and restart Home Assistant.
 
 ### Manual
 
@@ -70,7 +69,7 @@ Copy `custom_components/dynalogic` into your `config/custom_components/` folder 
 
 Add the integration via **Settings → Devices & Services → Add Integration → Dynalogic**. It asks for one thing: the postcode your parcels are delivered to. That becomes the default for every parcel you add, so you only type it once.
 
-Then add parcels via the integration's **Configure** dialog, the [`dynalogic.track_parcel`](#services) action, or a [dashboard button](examples/dashboards/add_parcel_card.yaml). A parcel going to a different address can carry its own postcode.
+Then add parcels via the integration's **Configure** dialog, the [`dynalogic.track_parcel`](#services) action, or a [dashboard button](examples/dashboards/add_parcel_card.yaml). A parcel going to a different address needs its own postcode: add it with the `dynalogic.track_parcel` action and its `postal_code` field. The Configure dialog only takes order numbers, uses the hub postcode for new ones, and keeps a postcode that was set through the action.
 
 Adding a parcel checks it with Dynalogic straight away, so a mistyped order number or the wrong postcode is caught there rather than showing up as a parcel that never moves.
 
@@ -80,8 +79,7 @@ Open **Configure** on the integration entry:
 
 | Section | Option | Default | Description |
 |---|---|---|---|
-| Parcels | Add / remove | — | Manage the tracked order numbers. Changes apply immediately, no restart. |
-| Parcels | Postcode | hub postcode | Only for a parcel delivered to a different address than the one you set up. |
+| Parcels | Add / remove | — | Manage the tracked order numbers, using the hub postcode. Changes apply immediately, no restart. A parcel with its own postcode (set through `dynalogic.track_parcel`) keeps it. |
 | Delivered parcels | Filter by / amount | last 7 days | How long delivered parcels stay visible on the delivered sensor. |
 | Parcel history | Include status history | off | Adds a `history` attribute per parcel with each status update. |
 
@@ -169,7 +167,7 @@ Every payload is the full normalised parcel plus the hub's `device_id`. Events a
 
 | Service | Fields | Description |
 |---|---|---|
-| `dynalogic.track_parcel` | `tracking_code`, `postal_code` (optional) | Start tracking a parcel |
+| `dynalogic.track_parcel` | `tracking_code`, `postal_code` (optional, defaults to the hub postcode) | Start tracking a parcel |
 | `dynalogic.untrack_parcel` | `tracking_code` | Stop tracking a parcel |
 
 ## Examples

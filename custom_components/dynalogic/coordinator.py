@@ -208,12 +208,13 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
         return self._cached_device_id
 
     def _tracked(self) -> list[tuple[str, str]]:
-        """Return every tracking code paired with this hub's postcode."""
-        postal_code = self.config_entry.options.get(CONF_POSTAL_CODE)
+        """Return every tracking code with its own postcode, else the hub's."""
+        hub_postal_code = self.config_entry.options.get(CONF_POSTAL_CODE)
         return [
-            (item[CONF_TRACKING_CODE], postal_code)
+            (item[CONF_TRACKING_CODE], item.get(CONF_POSTAL_CODE) or hub_postal_code)
             for item in self.config_entry.options.get(CONF_PARCELS, [])
-            if item.get(CONF_TRACKING_CODE) and postal_code
+            if item.get(CONF_TRACKING_CODE)
+            and (item.get(CONF_POSTAL_CODE) or hub_postal_code)
         ]
 
     @property

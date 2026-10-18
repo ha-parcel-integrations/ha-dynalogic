@@ -53,12 +53,25 @@ async def test_track_parcel_inherits_the_hub_postcode(hass):
     assert entry.options[CONF_PARCELS] == [_parcel()]
 
 
-async def test_track_parcel_validates_an_optional_postcode(hass):
+async def test_track_parcel_stores_a_different_postcode_on_the_parcel(hass):
     entry = await _setup(hass)
     await _call(
         hass,
         "track_parcel",
         {CONF_TRACKING_CODE: CODE, CONF_POSTAL_CODE: "3011 aa"},
+    )
+
+    assert entry.options[CONF_PARCELS] == [
+        {CONF_TRACKING_CODE: CODE, CONF_POSTAL_CODE: "3011AA"}
+    ]
+
+
+async def test_track_parcel_with_the_hub_postcode_stores_none(hass):
+    entry = await _setup(hass)
+    await _call(
+        hass,
+        "track_parcel",
+        {CONF_TRACKING_CODE: CODE, CONF_POSTAL_CODE: POSTCODE.lower()},
     )
 
     assert entry.options[CONF_PARCELS] == [_parcel()]

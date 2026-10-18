@@ -62,6 +62,18 @@ def _entry_with(parcels: list[dict]) -> MockConfigEntry:
     )
 
 
+def test_tracked_pairs_each_code_with_its_own_postcode_else_the_hub_one():
+    entry = _entry_with(
+        [_parcel(ACTIVE_CODE), {**_parcel(OTHER_CODE), CONF_POSTAL_CODE: "3011AA"}]
+    )
+    coordinator = DynalogicCoordinator.__new__(DynalogicCoordinator)
+    coordinator.config_entry = entry
+    assert coordinator._tracked() == [
+        (ACTIVE_CODE, POSTCODE),
+        (OTHER_CODE, "3011AA"),
+    ]
+
+
 def _in_transit(code: str = ACTIVE_CODE) -> dict:
     """Step 2 of the default delivery scenario: in the network, not on a van."""
     sample = active_sample(code)
