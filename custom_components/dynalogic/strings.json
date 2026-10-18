@@ -24,40 +24,6 @@
     "step": {
       "init": {
         "title": "Dynalogic options",
-        "sections": {
-          "parcels": {
-            "name": "Parcels",
-            "data": {
-              "add": "Add a parcel",
-              "remove": "Remove parcels",
-              "postal_code": "Postcode (optional)"
-            },
-            "data_description": {
-              "add": "Enter the Dynalogic order number to start tracking it. You find it in the shipping confirmation or the tracking mail — MediaMarkt, Samsung, Nespresso and Menken deliveries all run on Dynalogic too.",
-              "postal_code": "Only needed when this parcel goes to a different address than the one you set up. Leave empty to use it."
-            }
-          },
-          "delivered": {
-            "name": "Delivered parcels",
-            "data": {
-              "delivered_filter_type": "Filter by",
-              "delivered_filter_amount": "Amount"
-            },
-            "data_description": {
-              "delivered_filter_type": "Show delivered parcels from the last X days, or limit to the X most recent.",
-              "delivered_filter_amount": "Number of days or parcels to show."
-            }
-          },
-          "history": {
-            "name": "Parcel history",
-            "data": {
-              "include_history": "Include status history"
-            },
-            "data_description": {
-              "include_history": "Add a per-parcel history attribute listing each status update (timestamp, status, original text). Off by default."
-            }
-          }
-        },
         "menu_options": {
           "parcels": "Parcels",
           "settings": "Settings"

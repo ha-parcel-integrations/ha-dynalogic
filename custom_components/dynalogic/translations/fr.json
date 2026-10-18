@@ -24,40 +24,6 @@
     "step": {
       "init": {
         "title": "Options Dynalogic",
-        "sections": {
-          "parcels": {
-            "name": "Colis",
-            "data": {
-              "add": "Ajouter un colis",
-              "remove": "Supprimer des colis",
-              "postal_code": "Code postal (optionnel)"
-            },
-            "data_description": {
-              "add": "Saisissez le numéro de commande Dynalogic pour commencer à suivre ce colis. Vous le trouvez sur la confirmation d'expédition ou l'e-mail de suivi — les livraisons MediaMarkt, Samsung, Nespresso et Menken passent elles aussi par Dynalogic.",
-              "postal_code": "Uniquement nécessaire si ce colis est livré à une adresse différente de celle configurée. Laissez vide pour utiliser celle-ci."
-            }
-          },
-          "delivered": {
-            "name": "Colis livrés",
-            "data": {
-              "delivered_filter_type": "Filtrer par",
-              "delivered_filter_amount": "Quantité"
-            },
-            "data_description": {
-              "delivered_filter_type": "Afficher les colis livrés des X derniers jours, ou se limiter aux X plus récents.",
-              "delivered_filter_amount": "Nombre de jours ou de colis à afficher."
-            }
-          },
-          "history": {
-            "name": "Historique des colis",
-            "data": {
-              "include_history": "Inclure l'historique des statuts"
-            },
-            "data_description": {
-              "include_history": "Ajoute un attribut d'historique par colis listant chaque mise à jour de statut (horodatage, statut, texte d'origine). Désactivé par défaut."
-            }
-          }
-        },
         "menu_options": {
           "parcels": "Colis",
           "settings": "Paramètres"
