@@ -5,6 +5,8 @@
 [![HACS](https://img.shields.io/badge/HACS-Default-41BDF5.svg)](https://github.com/hacs/integration)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+> 📦 Part of [**ha-parcel-integrations**](https://ha-parcel-integrations.github.io/), a family of package-tracking integrations for Home Assistant that all publish the same parcel format, statuses and events, so they plug into cross-carrier automations and the optional [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator). Browse the other carriers on the website.
+>
 > 💬 Questions or feedback? Join the discussion on the [Home Assistant community](https://community.home-assistant.io/t/packages-postnl-dhl-nl-dpd-and-gls-parcel-integration/112433/).
 
 A custom Home Assistant integration that tracks your [Dynalogic](https://track.mydynalogic.eu) parcels. Dynalogic is a Benelux last-mile carrier, delivering in the Netherlands and Belgium. No account is needed — you enter the order number and the delivery postcode yourself, exactly as you would on their tracking page.
@@ -12,8 +14,6 @@ A custom Home Assistant integration that tracks your [Dynalogic](https://track.m
 **You may be a Dynalogic customer without knowing it.** The same delivery network — and the same tracking — runs behind a number of consumer brands: MediaMarkt, Samsung, Nespresso (machinereparatie), Menken, Dynasure and Dynahealth. If your tracking link points at one of those sites, this integration tracks that parcel.
 
 > ⚠️ **Pre-1.0 release.** Most of the mapping has been confirmed by a user's report. What is still missing is the **delivery window**: the only response we have ever seen was of an already-delivered parcel, which does not carry one, so the *next delivery* sensor and the calendar stay empty for now. Anything the integration does not recognise is logged as a warning with a link to report it — those reports are what gets this to 1.0.
-
-Part of the [ha-parcel-integrations](https://ha-parcel-integrations.github.io/) family: it publishes the same canonical parcel format, statuses and events as the other carrier integrations, so it plugs straight into the [Parcel Aggregator](https://github.com/ha-parcel-integrations/ha-parcel-aggregator) and cross-carrier automations.
 
 ## Contents
 
