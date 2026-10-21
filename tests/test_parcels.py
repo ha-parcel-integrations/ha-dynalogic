@@ -12,12 +12,12 @@ everything else, and for every parcel still in transit, it still only means
 as carefully as the mapping itself, because below 1.0 they are how the mapping
 gets corrected.
 """
-from datetime import datetime, timedelta, timezone
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-import custom_components.dynalogic.parcels as parcels_module
 from custom_components.dynalogic.const import (
     CAPABILITIES,
     CONF_DELIVERED_FILTER_AMOUNT,
@@ -26,6 +26,7 @@ from custom_components.dynalogic.const import (
     KNOWN_CAPABILITIES,
     ParcelStatus,
 )
+import custom_components.dynalogic.parcels as parcels_module
 from custom_components.dynalogic.parcels import (
     apply_delivered_filter,
     build_history,
@@ -69,7 +70,7 @@ def _reset_one_shot_warnings():
 
 
 @pytest.mark.parametrize(
-    "scenario,step,code,expected",
+    ("scenario", "step", "code", "expected"),
     [
         # The completed result code at the last step is the only delivery.
         ("DEL_DEF", 4, 0, ParcelStatus.DELIVERED),
@@ -164,7 +165,7 @@ def test_raw_status_marks_missing_parts_and_is_none_when_empty():
 def test_parse_iso_handles_offsets_naive_and_garbage():
     assert parse_iso("2026-04-29T13:12:42+02:00").tzinfo is not None
     # A naive value is assumed UTC so mixed lists still sort.
-    assert parse_iso("2026-04-29T13:12:42").tzinfo == timezone.utc
+    assert parse_iso("2026-04-29T13:12:42").tzinfo == UTC
     assert parse_iso("not-a-date") is None
     assert parse_iso(None) is None
 
@@ -204,9 +205,7 @@ def test_to_iso_timestamp_applies_winter_offset():
 def test_to_iso_timestamp_trusts_an_explicit_offset():
     """Only a zone-less stamp gets the Amsterdam reading applied to it."""
     assert to_iso_timestamp("2026-08-04T13:34:10Z") == "2026-08-04T13:34:10+00:00"
-    assert (
-        to_iso_timestamp("2026-08-04T13:34:10+05:00") == "2026-08-04T13:34:10+05:00"
-    )
+    assert to_iso_timestamp("2026-08-04T13:34:10+05:00") == "2026-08-04T13:34:10+05:00"
 
 
 def test_to_iso_timestamp_ignores_empty_values():
@@ -376,7 +375,10 @@ def test_describe_structure_lists_paths_and_types_only():
 
 
 def test_describe_structure_marks_empty_containers():
-    assert describe_structure({"A": {}, "B": []}) == ["A: empty object", "B[]: empty list"]
+    assert describe_structure({"A": {}, "B": []}) == [
+        "A: empty object",
+        "B[]: empty list",
+    ]
 
 
 def test_describe_structure_stops_at_a_depth_cap():
@@ -634,7 +636,7 @@ def _entry(filter_type: str, amount: int) -> MockConfigEntry:
 
 
 def _delivered_pair() -> list[dict]:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     return [
         {"barcode": "RECENT", "delivered_at": (now - timedelta(days=1)).isoformat()},
         {"barcode": "OLD", "delivered_at": (now - timedelta(days=30)).isoformat()},

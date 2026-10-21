@@ -1,4 +1,5 @@
 """Constants for the Dynalogic parcel tracker integration."""
+
 from enum import StrEnum
 
 from homeassistant.const import Platform
@@ -16,14 +17,14 @@ class ParcelStatus(StrEnum):
     roughly the order a parcel moves through.
     """
 
-    REGISTERED = "registered"               # Sender announced the parcel; not handed over yet
-    IN_TRANSIT = "in_transit"               # In the carrier's network
-    OUT_FOR_DELIVERY = "out_for_delivery"   # On a delivery vehicle today
-    AT_PICKUP_POINT = "at_pickup_point"     # Ready to collect at a pickup location
-    DELIVERED = "delivered"                 # Handed over
-    RETURNING = "returning"                 # Failed delivery, going back to sender
-    PROBLEM = "problem"                     # Carrier reports an exception/issue
-    UNKNOWN = "unknown"                     # Raw status we have not mapped yet
+    REGISTERED = "registered"  # Sender announced the parcel; not handed over yet
+    IN_TRANSIT = "in_transit"  # In the carrier's network
+    OUT_FOR_DELIVERY = "out_for_delivery"  # On a delivery vehicle today
+    AT_PICKUP_POINT = "at_pickup_point"  # Ready to collect at a pickup location
+    DELIVERED = "delivered"  # Handed over
+    RETURNING = "returning"  # Failed delivery, going back to sender
+    PROBLEM = "problem"  # Carrier reports an exception/issue
+    UNKNOWN = "unknown"  # Raw status we have not mapped yet
 
 
 PLATFORMS = [Platform.BUTTON, Platform.CALENDAR, Platform.SENSOR]
@@ -100,7 +101,7 @@ POSTCODE_RE = r"^[1-9][0-9]{3}([A-Z]{2})?$"
 #
 # * ``Scenario``   — *which kind of job* this is (delivery, pickup, swap, …),
 #   13 closed values, each ending in ``_DEF`` (default course) or ``_FAIL``;
-# * ``ActiveStep`` — 1–4, the position within that scenario;
+# * ``ActiveStep`` — 1-4, the position within that scenario;
 # * ``TransportResultCode`` — an integer, 16 known values, of which only ``0``
 #   has a known meaning: the vendor's own client calls it the completed state.
 #
@@ -116,23 +117,23 @@ COMPLETE_RESULT_CODES = frozenset({0})
 
 KNOWN_SCENARIOS = frozenset(
     {
-        "DEL_DEF",   # delivery, default course
-        "DEL_NB",    # delivery to a neighbour
+        "DEL_DEF",  # delivery, default course
+        "DEL_NB",  # delivery to a neighbour
         "DEL_FAIL",  # delivery failed
-        "PU_DEF",    # pickup
+        "PU_DEF",  # pickup
         "PU_FAIL",
-        "SW_DEF",    # swap: deliver the new item, take the old one
+        "SW_DEF",  # swap: deliver the new item, take the old one
         "SW_FAIL",
-        "RS_DEF",    # return / retour to the sender
+        "RS_DEF",  # return / retour to the sender
         "RS_FAIL",
-        "DP_DEF",    # drop-off
+        "DP_DEF",  # drop-off
         "DP_FAIL",
-        "COR_DEF",   # correction job
+        "COR_DEF",  # correction job
         "COR_FAIL",
     }
 )
 # The prefix expansions above are inference from the FAQ articles each scenario
-# points at; the ``_DEF`` / ``_FAIL`` split and the 1–4 step count are certain.
+# points at; the ``_DEF`` / ``_FAIL`` split and the 1-4 step count are certain.
 MIN_ACTIVE_STEP = 1
 MAX_ACTIVE_STEP = 4
 
@@ -143,16 +144,16 @@ MAX_ACTIVE_STEP = 4
 # The keys below marked *observed* were confirmed against a real delivered
 # `full` response (captured 2026-08-05, one order). The rest are still
 # reconstruction.
-KEY_TRACKING_NUMBER = "TrackAndTraceNumber"   # observed
-KEY_RESULT_CODE = "TransportResultCode"       # observed
-KEY_SCENARIO = "Scenario"                     # observed
-KEY_ACTIVE_STEP = "ActiveStep"                # observed
-KEY_ORDER_DATA = "OrderData"                  # observed
-KEY_ACTIVITIES = "Activities"                 # observed
-KEY_EXECUTED = "ExecutedDateTime"             # observed
-KEY_ADDRESSEE = "Addressee"                   # observed — object, shape known
-KEY_CONTACT = "ContactInformation"            # observed — object, shape known
-KEY_CUSTOMER_NAME = "CustomerName"            # observed — the shipper, e.g. "bol."
+KEY_TRACKING_NUMBER = "TrackAndTraceNumber"  # observed
+KEY_RESULT_CODE = "TransportResultCode"  # observed
+KEY_SCENARIO = "Scenario"  # observed
+KEY_ACTIVE_STEP = "ActiveStep"  # observed
+KEY_ORDER_DATA = "OrderData"  # observed
+KEY_ACTIVITIES = "Activities"  # observed
+KEY_EXECUTED = "ExecutedDateTime"  # observed
+KEY_ADDRESSEE = "Addressee"  # observed — object, shape known
+KEY_CONTACT = "ContactInformation"  # observed — object, shape known
+KEY_CUSTOMER_NAME = "CustomerName"  # observed — the shipper, e.g. "bol."
 KEY_ORDER_STATUS = "OrderStatusForAddressee"  # observed — "COMPLETED"
 
 # The carrier's own machine-readable status, alongside the three-field triple.

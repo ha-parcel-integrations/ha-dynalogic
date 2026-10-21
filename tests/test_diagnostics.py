@@ -1,10 +1,9 @@
 """Tests for Dynalogic diagnostics."""
+
 from datetime import timedelta
 from unittest.mock import MagicMock
 
-from custom_components.dynalogic.diagnostics import (
-    async_get_config_entry_diagnostics,
-)
+from custom_components.dynalogic.diagnostics import async_get_config_entry_diagnostics
 from custom_components.dynalogic.parcels import normalize_parcel
 
 from .payloads import ACTIVE_CODE, POSTCODE, active_sample

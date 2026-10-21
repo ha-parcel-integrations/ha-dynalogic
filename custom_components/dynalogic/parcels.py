@@ -18,10 +18,11 @@ So the rule here is unchanged: read the fields we are sure exist, publish
 once via :func:`_warn_once` so the next real parcel corrects it instead of
 passing silently. The suite's pre-1.0 obligation is exactly this.
 """
+
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 import logging
-from datetime import datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -90,7 +91,8 @@ def _warn_once(key: str, message: str, *args: Any) -> None:
         return
     _warned.add(key)
     _LOGGER.warning(
-        message + "\n  Please report it — open an issue with this line: %s",
+        # The message is itself a %-template, so the URL placeholder is appended.
+        message + "\n  Please report it — open an issue with this line: %s",  # noqa: G003
         *args,
         NEW_ISSUE_URL,
     )
@@ -142,7 +144,7 @@ def map_parcel_status(
     """Map Dynalogic's three status fields onto one canonical status.
 
     Dynalogic has no single status field. It reports *which kind of job* this is
-    (``Scenario``), *how far along* it is (``ActiveStep``, 1–4) and a
+    (``Scenario``), *how far along* it is (``ActiveStep``, 1-4) and a
     ``TransportResultCode`` whose 16 values are all known but only one of which
     has a known meaning: ``0`` is the completed state, per the vendor's own
     client. So the mapping leans on the two fields that are legible and treats a
@@ -306,11 +308,11 @@ def parse_iso(value: str | None) -> datetime | None:
     if not value:
         return None
     try:
-        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value))
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
+        parsed = parsed.replace(tzinfo=UTC)
     return parsed
 
 
@@ -345,7 +347,7 @@ def to_iso_timestamp(value: Any) -> str | None:
         parsed = datetime.strptime(text, TIMESTAMP_FORMAT)
     except ValueError:
         try:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(text)
         except ValueError:
             parsed = None
 
@@ -787,14 +789,12 @@ def apply_delivered_filter(parcels: list[dict], entry: ConfigEntry) -> list[dict
     shows.
     """
     options = entry.options
-    filter_type = options.get(
-        CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE
-    )
+    filter_type = options.get(CONF_DELIVERED_FILTER_TYPE, DEFAULT_DELIVERED_FILTER_TYPE)
     amount = int(
         options.get(CONF_DELIVERED_FILTER_AMOUNT, DEFAULT_DELIVERED_FILTER_AMOUNT)
     )
     if filter_type == "days":
-        cutoff = datetime.now(timezone.utc) - timedelta(days=amount)
+        cutoff = datetime.now(UTC) - timedelta(days=amount)
         return [
             parcel
             for parcel in parcels

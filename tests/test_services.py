@@ -1,8 +1,9 @@
 """Tests for the Dynalogic services (track_parcel / untrack_parcel)."""
+
 from unittest.mock import AsyncMock, patch
 
-import pytest
 from homeassistant.exceptions import ServiceValidationError
+import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dynalogic.const import (
@@ -16,6 +17,8 @@ from .payloads import POSTCODE, active_sample
 
 _SAMPLE = active_sample()
 CODE = "1234567890"
+
+
 def _parcel(code: str = CODE) -> dict:
     return {CONF_TRACKING_CODE: code}
 

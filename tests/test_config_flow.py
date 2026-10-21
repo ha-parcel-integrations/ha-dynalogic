@@ -1,4 +1,5 @@
 """Tests for the Dynalogic config and options flow."""
+
 from contextlib import contextmanager
 from unittest.mock import AsyncMock, patch
 
@@ -7,6 +8,7 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.dynalogic.api import DynalogicApiError
 from custom_components.dynalogic.config_flow import (
+    async_parcel_error,
     normalize_postcode,
     normalize_tracking_code,
     valid_postcode,
@@ -136,8 +138,13 @@ def _parcel(code: str, postcode: str = POSTCODE) -> dict:
 
 
 def _init_input(
-    *, add="", postcode="", remove=None, history=False,
-    filter_type="days", amount=7,
+    *,
+    add="",
+    postcode="",
+    remove=None,
+    history=False,
+    filter_type="days",
+    amount=7,
 ) -> dict:
     """Build the sectioned options-form submission."""
     parcels: dict = {"add": add, CONF_POSTAL_CODE: postcode}
@@ -165,7 +172,13 @@ async def _open_options_step(hass, entry, step_id: str):
 
 async def test_options_parcel_list_can_be_cleared(hass):
     """A submitted empty list removes the final manually tracked parcel."""
-    entry = MockConfigEntry(domain=DOMAIN, options={CONF_PARCELS: [{CONF_TRACKING_CODE: "EXAMPLE111111"}], CONF_POSTAL_CODE: "1234AB"})
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        options={
+            CONF_PARCELS: [{CONF_TRACKING_CODE: "EXAMPLE111111"}],
+            CONF_POSTAL_CODE: "1234AB",
+        },
+    )
     entry.add_to_hass(hass)
     result = await _open_options_step(hass, entry, "parcels")
     result = await hass.config_entries.options.async_configure(
@@ -178,11 +191,18 @@ async def test_options_parcel_list_can_be_cleared(hass):
 async def test_options_settings_preserve_parcel_list(hass):
     """Saving settings must never replace the manually tracked parcel list."""
     parcels = [{CONF_TRACKING_CODE: "EXAMPLE111111"}]
-    entry = MockConfigEntry(domain=DOMAIN, options={CONF_PARCELS: parcels, CONF_POSTAL_CODE: "1234AB"})
+    entry = MockConfigEntry(
+        domain=DOMAIN, options={CONF_PARCELS: parcels, CONF_POSTAL_CODE: "1234AB"}
+    )
     entry.add_to_hass(hass)
     result = await _open_options_step(hass, entry, "settings")
     result = await hass.config_entries.options.async_configure(
-        result["flow_id"], {CONF_DELIVERED_FILTER_TYPE: "days", CONF_DELIVERED_FILTER_AMOUNT: 7, CONF_INCLUDE_HISTORY: False}
+        result["flow_id"],
+        {
+            CONF_DELIVERED_FILTER_TYPE: "days",
+            CONF_DELIVERED_FILTER_AMOUNT: 7,
+            CONF_INCLUDE_HISTORY: False,
+        },
     )
     assert result["type"] == "create_entry"
     assert result["data"][CONF_PARCELS] == parcels
@@ -269,6 +289,7 @@ async def test_options_add_parcel_accepts_a_verified_code(hass):
 async def test_async_parcel_error_reports_cannot_connect_on_api_error(hass):
     """DynalogicApiError from the client is treated the same as a transport error."""
     with _patch_lookup(error=DynalogicApiError("boom")):
-        from custom_components.dynalogic.config_flow import async_parcel_error
-
-        assert await async_parcel_error(hass, "EXAMPLE111111", POSTCODE) == "cannot_connect"
+        assert (
+            await async_parcel_error(hass, "EXAMPLE111111", POSTCODE)
+            == "cannot_connect"
+        )

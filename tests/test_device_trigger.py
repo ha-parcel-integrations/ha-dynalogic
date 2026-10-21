@@ -1,4 +1,5 @@
 """Tests for Dynalogic device triggers."""
+
 from custom_components.dynalogic.const import DOMAIN
 from custom_components.dynalogic.device_trigger import (
     TRIGGER_EVENTS,

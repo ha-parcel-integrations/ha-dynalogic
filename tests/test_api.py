@@ -1,14 +1,12 @@
 """Tests for the Dynalogic API client."""
+
 import json
 from unittest.mock import AsyncMock, MagicMock
 
 import aiohttp
 import pytest
 
-from custom_components.dynalogic.api import (
-    DynalogicApiClient,
-    DynalogicApiError,
-)
+from custom_components.dynalogic.api import DynalogicApiClient, DynalogicApiError
 
 from .payloads import ACTIVE_CODE, POSTCODE, active_sample
 

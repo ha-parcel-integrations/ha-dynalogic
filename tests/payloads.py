@@ -24,6 +24,7 @@ What the capture settles, and what it does not:
 Every identifier is substituted (see `_CUSTOMER_ORDER_NUMBER` and friends) and
 every personal block is blanked, per the research repo's redaction rules.
 """
+
 from __future__ import annotations
 
 ACTIVE_CODE = "1234567890"
@@ -37,7 +38,7 @@ POSTCODE = "1012AB"
 # *distinct* here on purpose — the integration reads the order number from
 # `TrackAndTraceNumber`, and a fixture where both spellings hold the same value
 # could not tell a correct read from a lucky one.
-_CUSTOMER_ID = 18987                       # bol.'s account with Dynalogic
+_CUSTOMER_ID = 18987  # bol.'s account with Dynalogic
 _CUSTOMER_ORDER_NUMBER = "00000000001"
 _BARCODE = f"{_CUSTOMER_ID}{_CUSTOMER_ORDER_NUMBER}"
 
@@ -160,8 +161,7 @@ def delivered_sample(code: str = DELIVERED_CODE) -> dict:
                     "Id": 5,
                     "Name": "Niet bij buren",
                     "Description": (
-                        "Als u afwezig bent mogen we niet bij een van de buren "
-                        "leveren."
+                        "Als u afwezig bent mogen we niet bij een van de buren leveren."
                     ),
                     "TypeId": 1,
                     "InstructionUri": None,
