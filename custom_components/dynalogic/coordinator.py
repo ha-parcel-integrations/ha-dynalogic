@@ -131,6 +131,8 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
     ``self.delivered`` the rest.
     """
 
+    config_entry: ConfigEntry
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -209,12 +211,12 @@ class DynalogicCoordinator(DataUpdateCoordinator[list[dict]]):
     def _tracked(self) -> list[tuple[str, str]]:
         """Return every tracking code with its own postcode, else the hub's."""
         hub_postal_code = self.config_entry.options.get(CONF_POSTAL_CODE)
-        return [
-            (item[CONF_TRACKING_CODE], item.get(CONF_POSTAL_CODE) or hub_postal_code)
-            for item in self.config_entry.options.get(CONF_PARCELS, [])
-            if item.get(CONF_TRACKING_CODE)
-            and (item.get(CONF_POSTAL_CODE) or hub_postal_code)
-        ]
+        tracked: list[tuple[str, str]] = []
+        for item in self.config_entry.options.get(CONF_PARCELS, []):
+            postal_code = item.get(CONF_POSTAL_CODE) or hub_postal_code
+            if item.get(CONF_TRACKING_CODE) and postal_code:
+                tracked.append((item[CONF_TRACKING_CODE], postal_code))
+        return tracked
 
     @property
     def _include_history(self) -> bool:
