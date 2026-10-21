@@ -59,7 +59,12 @@ A custom Home Assistant integration that tracks your [Dynalogic](https://track.m
 ### HACS (recommended)
 
 1. Open HACS and search for **Dynalogic**.
-2. Install it and restart Home Assistant.
+2. Install it.
+3. Restart Home Assistant if HACS asks you to.
+
+Or click the button below to open it directly in HACS:
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=ha-parcel-integrations&repository=ha-dynalogic&category=integration)
 
 ### Manual
 
@@ -67,7 +72,9 @@ Copy `custom_components/dynalogic` into your `config/custom_components/` folder 
 
 ## Configuration
 
-Add the integration via **Settings → Devices & Services → Add Integration → Dynalogic**. It asks for one thing: the postcode your parcels are delivered to. That becomes the default for every parcel you add, so you only type it once.
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=dynalogic)
+
+Or set it up by hand: add the integration via **Settings → Devices & Services → Add Integration → Dynalogic**. It asks for one thing: the postcode your parcels are delivered to. That becomes the default for every parcel you add, so you only type it once.
 
 Then add parcels via the integration's **Configure** dialog, the [`dynalogic.track_parcel`](#services) action, or a [dashboard button](examples/dashboards/add_parcel_card.yaml). A parcel going to a different address needs its own postcode: add it with the `dynalogic.track_parcel` action and its `postal_code` field. The Configure dialog only takes order numbers, uses the hub postcode for new ones, and keeps a postcode that was set through the action.
 
