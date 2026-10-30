@@ -123,6 +123,7 @@ Standard HA removal applies: **Settings → Devices & Services → Dynalogic →
 | `sensor.dynalogic_parcel_<code>` | One per tracked parcel; state is the canonical status, attributes carry the full normalised parcel |
 | `sensor.dynalogic_next_delivery` | Earliest expected delivery moment across all active parcels |
 | `sensor.dynalogic_delivered_parcels` | Recently delivered parcels (see the retention option) |
+| `calendar.dynalogic_deliveries` | Read-only calendar of expected deliveries, no extra API calls |
 | `sensor.dynalogic_last_successful_update` | Diagnostic: when Dynalogic was last polled successfully |
 
 A delivered parcel moves from its per-parcel sensor to the delivered sensor automatically.
