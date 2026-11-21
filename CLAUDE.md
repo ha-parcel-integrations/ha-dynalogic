@@ -44,7 +44,9 @@ Where this repo diverges from it, that is recorded below under
 door; its `DP_*` drop-off scenarios are a job type, not a parcel waiting in
 a shop, so nothing in `map_parcel_status` ever produces
 `ParcelStatus.AT_PICKUP_POINT` (`parcels.py`). Structural, not a gap — see
-`.github/CONVENTIONS.md`'s pickup-point convention.
+`.github/CONVENTIONS.md`'s pickup-point convention. `pickup` is a constant
+`False` and `pickup_point` is always `None`; the integration exposes neither
+`awaiting_pickup` nor `en_route_to_pickup_point`.
 
 **API mechanics live in `carrier-research/dynalogic/api/` (private research
 repo)** — the keyless middleware, the two `transportorder` routes, what the
@@ -123,7 +125,15 @@ An **in-transit capture** is the one thing left worth asking for. So:
 - `check_response_shape` runs in the **coordinator**, on real responses only.
   The 404 placeholder is ours and has no shape to complain about.
 
-### Status is three fields, not one
+### Delivered and delivery window
+
+- **`delivered` is `status is DELIVERED`.** `RS_DEF` stays `returning` and
+  `delivered` `False` even once complete: no real return has been seen, so the
+  back-at-sender signal is unknown. Contract says a terminal return may count as
+  delivered; here it does not, because that combination is unobserved.
+- **`planned_from` / `planned_to` go through the shared window helpers** with
+  the carrier zone, so they are `None` today (no window field is known) and will
+  follow the contract shape once one is named.
 
 `Scenario` (job type, 13 closed values) × `ActiveStep` (1–4) ×
 `TransportResultCode` (16 values, only `0` understood = complete). The mapping
