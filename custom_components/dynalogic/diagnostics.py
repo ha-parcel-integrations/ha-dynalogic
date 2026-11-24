@@ -32,6 +32,7 @@ TO_REDACT = {
     "barcode",
     "sender",
     "receiver",
+    "contents",
     "url",
     "postal_code",
     # carrier payload — the recipient block, whole

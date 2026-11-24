@@ -59,6 +59,13 @@ async def test_diagnostics_redacts_every_identifier_in_a_real_response(hass):
     assert order_data["Activities"][0]["Description"]
 
 
+async def test_diagnostics_redacts_the_contents(hass):
+    parcel = normalize_parcel(active_sample())
+    parcel["contents"] = "Running shoes"
+    result = await _diagnostics(hass, parcel)
+    assert result["incoming"][0]["contents"] == "**REDACTED**"
+
+
 async def test_diagnostics_surfaces_polling_state(hass):
     """The tier and interval last computed by the coordinator, for support reports."""
     result = await _diagnostics(hass, normalize_parcel(active_sample()))

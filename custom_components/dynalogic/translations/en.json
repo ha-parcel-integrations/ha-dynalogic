@@ -72,6 +72,10 @@
         "postal_code": {
           "name": "Postcode",
           "description": "Delivery postcode for this parcel. Leave empty to use the one from the integration setup."
+        },
+        "contents": {
+          "name": "Contents",
+          "description": "What is in the parcel, in your own words. Calling this again for a tracked parcel replaces it; an empty text clears it."
         }
       }
     },
@@ -82,6 +86,20 @@
         "tracking_code": {
           "name": "Order number",
           "description": "The Dynalogic order number to stop tracking."
+        }
+      }
+    },
+    "update_contents": {
+      "name": "Update parcel contents",
+      "description": "Set what is in a parcel, in your own words, for a tracking code. An empty text clears it.",
+      "fields": {
+        "tracking_code": {
+          "name": "Order number",
+          "description": "The Dynalogic order number."
+        },
+        "contents": {
+          "name": "Contents",
+          "description": "What is in the parcel, in your own words. An empty text clears it."
         }
       }
     }

@@ -10,11 +10,29 @@ track_parcel:
       example: "1012AB"
       selector:
         text:
+    contents:
+      required: false
+      example: "Running shoes"
+      selector:
+        text:
 
 untrack_parcel:
   fields:
     tracking_code:
       required: true
       example: "1234567890"
+      selector:
+        text:
+
+update_contents:
+  fields:
+    tracking_code:
+      required: true
+      example: "1234567890"
+      selector:
+        text:
+    contents:
+      required: false
+      example: "Running shoes"
       selector:
         text:

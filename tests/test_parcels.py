@@ -442,6 +442,7 @@ CANONICAL_KEYS = [
     "barcode",
     "sender",
     "receiver",
+    "contents",
     "status",
     "raw_status",
     "delivered",
@@ -512,6 +513,7 @@ def test_normalize_reports_an_addressee_it_cannot_read(caplog):
     raw["OrderData"]["Addressee"] = {"Straat": "Kerkstraat 1"}
     parcel = normalize_parcel(raw)
     assert parcel["receiver"] is None
+    assert parcel["contents"] is None
     assert "Straat" in caplog.text
     assert "Kerkstraat" not in caplog.text
 

@@ -72,6 +72,10 @@
         "postal_code": {
           "name": "Code postal",
           "description": "Code postal de livraison de ce colis. Laissez vide pour utiliser celui de la configuration de l'intégration."
+        },
+        "contents": {
+          "name": "Contenu",
+          "description": "Ce que contient le colis, avec vos propres mots. Un nouvel appel pour un colis suivi remplace le contenu ; un texte vide l'efface."
         }
       }
     },
@@ -82,6 +86,20 @@
         "tracking_code": {
           "name": "Numéro de commande",
           "description": "Le numéro de commande Dynalogic à ne plus suivre."
+        }
+      }
+    },
+    "update_contents": {
+      "name": "Mettre à jour le contenu du colis",
+      "description": "Définissez ce que contient un colis, avec vos propres mots, pour un numéro de suivi. Un texte vide efface le contenu.",
+      "fields": {
+        "tracking_code": {
+          "name": "Numéro de commande",
+          "description": "Le numéro de commande Dynalogic."
+        },
+        "contents": {
+          "name": "Contenu",
+          "description": "Ce que contient le colis, avec vos propres mots. Un texte vide l'efface."
         }
       }
     }
